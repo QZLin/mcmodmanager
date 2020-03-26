@@ -12,7 +12,6 @@ class Option:
         self.states = BooleanVar(value=clicked)
         self.check_button = Checkbutton(root, text=text,
                                         command=self.change, variable=self.states)
-
         self.check_button.pack(anchor='w')
 
     def change(self):
@@ -77,7 +76,8 @@ class App:
         if type(data) == dict:
             self.show_err(data['lost'])
 
-    def about(self):
+    @staticmethod
+    def about():
         tp = Toplevel()
         Label(tp, text='MC Mod Manager\nBy Q.Z.Lin').pack()
 
@@ -87,20 +87,14 @@ class App:
 
     def show_err(self, result):
         for x in result:
-            x = 'LostMod:' + x
-            label = Label(self.scroll_frame, text=x, fg='red')
+            label = Label(self.scroll_frame, text='LostMod: ' + x, fg='red')
             label.pack(anchor='w')
 
     def reload(self, err_list=None):
-        data = None
-
         self.root.destroy()
         self.root = Tk()
         self.root.title(TITLE)
-
-        if type(err_list) == list:
-            data = {'lost': err_list}
-        App(self.root, data)
+        App(self.root, {'lost': err_list} if type(err_list) == list else None)
 
     def import_(self):
         code = self.text.get('1.0', END).replace('\n', '')

@@ -6,7 +6,7 @@ TYPE_DISABLED = '.disabled'
 
 
 def _handle(list1, list2, file):
-    # list1,list2 (share) <- jars disables
+    # list1,list2 (share) <- jars,disables
     length = len(file)
     if length < 4:
         return
@@ -26,25 +26,25 @@ def _handle(list1, list2, file):
 def get_jars(publish=False):
     jars, disables = [], []
     for root, dirs, files in walk(".", topdown=True):
-        for name in files:
-            if root == '.':
+        if root == '.':
+            for name in files:
                 _handle(jars, disables, name)
-    if publish:
-        return jars
-    else:
-        return jars, disables
+        break
+    return jars if publish else (jars, disables)
 
 
 def encode(jars):
-    code = ''
-    for jar in jars:
-        code += jar + SPLIT_CHAR
+    code = SPLIT_CHAR.join(jars)
     return code
 
 
 def decode(code):
     result = code.split(SPLIT_CHAR)
-    result.remove('')
+    try:
+        result.remove('')
+    except ValueError:
+        pass
+
     return result
 
 
