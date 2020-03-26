@@ -1,15 +1,19 @@
-from tkinter import BooleanVar, Checkbutton, Frame, Button, Text, END, Label, Tk
+from tkinter import BooleanVar, Frame, Checkbutton, Button, Text, END, Label, Tk, Canvas, Toplevel
+from tkinter.ttk import Scrollbar, Frame
 
 from ModManager import *
+
+TITLE = 'MC Mod Manager'
 
 
 class Option:
     def __init__(self, root, text, clicked=False):
         self.text = text
         self.states = BooleanVar(value=clicked)
-        self.cbt = Checkbutton(root, text=text, command=self.change, variable=self.states)
+        self.check_button = Checkbutton(root, text=text,
+                                        command=self.change, variable=self.states)
 
-        self.cbt.pack(anchor='w')
+        self.check_button.pack(anchor='w')
 
     def change(self):
         text = self.text
@@ -20,52 +24,92 @@ class Option:
             handle_file(DISABLE, text)
 
     def set_text(self, text):
-        self.text = text
-        self.cbt['text'] = text
+        self.check_button['text'] = self.text = text
 
 
 class App:
 
-    def __init__(self, root):
+    def __init__(self, root, data=None):
         self.root = root
-        a, b = get_jars()
-        for x in a:
-            opt = Option(root, x, True)
-        for x in b:
-            opt = Option(root, x[:-9])
+
+        container = Frame(root)
+        ###
+        canvas = Canvas(container, height='18c')
+        scrollbar = Scrollbar(container, orient="vertical", command=canvas.yview)
+
+        self.scroll_frame = scroll_frame = Frame(canvas)
+        scroll_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        container.pack(fill='both')
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
         ###
-        frame2 = Frame(root)
-        bt = Button(frame2, text='Import', command=self.import_)
-        bt2 = Button(frame2, text='Publish', command=self.publish)
-        bt.pack(side='left')
-        bt2.pack(side='right')
+        frame1 = Frame(scroll_frame)
+        a, b = get_jars()
+        for x in a:
+            opt = Option(frame1, x, True)
+        for x in b:
+            opt = Option(frame1, x[:-9])
+        frame1.pack()
+        ###
+
+        ###
+        frame2 = Frame(scroll_frame)
+        Button(frame2, text='about', command=self.about).pack(side='left')
+        bt_import = Button(frame2, text='导入Import', command=self.import_)
+        bt_export = Button(frame2, text='导出Export', command=self.publish)
+        bt_import.pack(side='left')
+        bt_export.pack(side='right')
         frame2.pack()
         ###
 
-        self.text = Text(root, height=5, width=50)
+        self.text = Text(scroll_frame, height=5, width=54)
         self.text.pack()
+
+        if type(data) == dict:
+            self.show_err(data['lost'])
+
+    def about(self):
+        tp = Toplevel()
+        Label(tp, text='MC Mod Manager\nBy Q.Z.Lin').pack()
 
     def publish(self):
         self.text.delete('1.0', 'end')
         self.text.insert('1.0', encode(get_jars(True)))
 
+    def show_err(self, result):
+        for x in result:
+            x = 'LostMod:' + x
+            label = Label(self.scroll_frame, text=x, fg='red')
+            label.pack(anchor='w')
+
+    def reload(self, err_list=None):
+        data = None
+
+        self.root.destroy()
+        self.root = Tk()
+        self.root.title(TITLE)
+
+        if type(err_list) == list:
+            data = {'lost': err_list}
+        App(self.root, data)
+
     def import_(self):
-        global tk
         code = self.text.get('1.0', END).replace('\n', '')
         result = compare(decode(code), get_jars())
-        if type(result) == list:
-            for x in result:
-                label = Label(text=x, fg='red')
-                label.pack(anchor='w')
-        tk.destroy()
-        tk = Tk()
-        tk.title('mcmodmanager')
-        app = App(tk)
+        self.reload(result)
 
 
 tk = Tk()
-tk.title('mcmodmanager')
+tk.title(TITLE)
 app = App(tk)
 
 tk.mainloop()

@@ -1,30 +1,34 @@
 from os import walk, rename
 
+SPLIT_CHAR = ':'
+TYPE_JAR = '.jar'
+TYPE_DISABLED = '.disabled'
+
 
 def _handle(list1, list2, file):
+    # list1,list2 (share) <- jars disables
     length = len(file)
     if length < 4:
         return
-    if file[-4:] == '.jar':
+    if file[-4:] == TYPE_JAR:
         list1.append(file)
         return
+
     if length < 9:
         return
-    if file[-9:] == '.disabled':
+    if file[-9:] == TYPE_DISABLED:
         list2.append(file)
         return
+
     return
 
 
 def get_jars(publish=False):
-    jars = []
-    disables = []
+    jars, disables = [], []
     for root, dirs, files in walk(".", topdown=True):
         for name in files:
             if root == '.':
                 _handle(jars, disables, name)
-        # for name in dirs:
-        #     print(os.path.join(root, name))
     if publish:
         return jars
     else:
@@ -34,12 +38,12 @@ def get_jars(publish=False):
 def encode(jars):
     code = ''
     for jar in jars:
-        code += jar + ':'
+        code += jar + SPLIT_CHAR
     return code
 
 
 def decode(code):
-    result = code.split(':')
+    result = code.split(SPLIT_CHAR)
     result.remove('')
     return result
 
@@ -49,40 +53,42 @@ ENABLE = 1
 DISABLE = 2
 
 
-def handle_file(err_type, file):
-    if err_type == ERR_LOST:
+def handle_file(handle_type, file):
+    if handle_type == ERR_LOST:
         print('lost', file)
-    elif err_type == ENABLE:
+    elif handle_type == ENABLE:
         print('enable', file)
         try:
-            rename(file + '.disabled', file)
+            rename(file + TYPE_DISABLED, file)
         except FileNotFoundError:
-            print('err', 'rename %s->%s' % (file + '.disabled', file))
+            print('err', 'rename %s->%s' % (file + TYPE_DISABLED, file))
         except FileExistsError:
             print('File:%s exist' % file)
-    elif err_type == DISABLE:
+    elif handle_type == DISABLE:
         print('disable', file)
         try:
-            rename(file, file + '.disabled')
+            rename(file, file + TYPE_DISABLED)
         except FileNotFoundError:
-            print('err', 'rename %s->%s' % (file, file + '.disabled'))
+            print('err', 'rename %s->%s' % (file, file + TYPE_DISABLED))
         except FileExistsError:
-            print('File:%s exist' % file + '.disabled')
+            print('File:%s exist' % file + TYPE_DISABLED)
 
 
 def compare(jars, jars_local):
-    local, disables = jars_local
+    local_jars, disables = jars_local
     lost = []
     for jar in jars:
-        if jar in local:
+        # (jar in code) in local or not
+        if jar in local_jars:
             pass
         else:
-            if jar + '.disabled' in disables:
+            if jar + TYPE_DISABLED in disables:
                 handle_file(ENABLE, jar)
             else:
                 handle_file(ERR_LOST, jar)
                 lost.append(jar)
-    for jar in local:
+    for jar in local_jars:
+        # local jars contain unexpected jar or not
         if jar in jars:
             pass
         else:
@@ -104,12 +110,4 @@ if __name__ == '__main__':
         compare(decode(txt), get_jars())
     elif mode == 1:
         txt = encode(get_jars(publish=True))
-        # i = 1
-        # out = ''
-        # for x in txt:
-        #     out += x
-        #     if i % 30 == 0:
-        #         out += '\n'
-        #     i += 1
-        # txt = out
         print(txt)
