@@ -106,7 +106,7 @@ if __name__ == '__main__':
         mode = 0
 
     if mode == 0:
-        txt = input('code:').replace('\n', '')
+        txt = input('code:')
         compare(decode(txt), get_jars())
     elif mode == 1:
         txt = encode(get_jars(publish=True))
