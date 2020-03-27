@@ -1,3 +1,4 @@
+from configparser import ConfigParser, NoSectionError, NoOptionError
 from tkinter import BooleanVar, Frame, Checkbutton, Button, Text, END, Label, Tk, Canvas, Toplevel
 from tkinter.ttk import Scrollbar, Frame
 
@@ -101,6 +102,18 @@ class App:
         result = compare(decode(code), get_jars())
         self.reload(result)
 
+
+def read_config():
+    config = ConfigParser()
+    config.read('config.ini')
+    try:
+        set_root(config.get('config', 'jar_path'))
+    except (NoSectionError, NoOptionError):
+        with open('config.ini', 'w') as file:
+            file.write('[config]\njar_path=../')
+
+
+# read_config()
 
 tk = Tk()
 tk.title(TITLE)

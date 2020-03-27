@@ -1,5 +1,6 @@
 from os import walk, rename
 
+jar_path = '../'
 SPLIT_CHAR = ':'
 TYPE_JAR = '.jar'
 TYPE_DISABLED = '.disabled'
@@ -23,10 +24,15 @@ def _handle(list1, list2, file):
     return
 
 
+def set_root(path):
+    global jar_path
+    jar_path = path
+
+
 def get_jars(publish=False):
     jars, disables = [], []
-    for root, dirs, files in walk(".", topdown=True):
-        if root == '.':
+    for root, dirs, files in walk(jar_path, topdown=True):
+        if root == root:
             for name in files:
                 _handle(jars, disables, name)
         break
