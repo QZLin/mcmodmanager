@@ -1,4 +1,5 @@
-from configparser import ConfigParser, NoSectionError, NoOptionError
+# from configparser import ConfigParser, NoSectionError, NoOptionError
+from base64 import b64decode, b16encode
 from tkinter import BooleanVar, Frame, Checkbutton, Button, Text, END, Label, Tk, Canvas, Toplevel
 from tkinter.ttk import Scrollbar, Frame
 
@@ -63,7 +64,7 @@ class App:
 
         ###
         frame2 = Frame(scroll_frame)
-        Button(frame2, text='about', command=self.about).pack(side='left')
+        Button(frame2, text='关于About', command=self.wx_tk_49).pack(side='left')
         bt_import = Button(frame2, text='导入Import', command=self.import_)
         bt_export = Button(frame2, text='导出Export', command=self.publish)
         bt_import.pack(side='left')
@@ -78,9 +79,16 @@ class App:
             self.show_err(data['lost'])
 
     @staticmethod
-    def about():
-        tp = Toplevel()
-        Label(tp, text='MC Mod Manager\nBy Q.Z.Lin').pack()
+    def wx_tk_49():
+        O0OOOO00OOOO0O000 = Toplevel()
+        O000O000O000O00O0 = Label(O0OOOO00OOOO0O000, text=b64decode(
+            b'TUMgTW9kIE1hbmFnZXIKTGljZW5zZTpHUEx2Mw' b'pCeSBRLlouTGluCm1haWw6cXpsaW4wMUAxNjMuY29t').decode())
+        O000O000O000O00O0['text'] = O000O000O000O00O0['text'] \
+            if b16encode(O000O000O000O00O0[
+                             'text'].encode()) == \
+               b'4D43204D6F64204D616E616765720A4' b'C6963656E73653A47504C76330A4279205' \
+               b'12E5A2E4C696E0A6D61696C3A717A6C696E3031403136332E636F6D' else ' '
+        O000O000O000O00O0.pack()
 
     def publish(self):
         self.text.delete('1.0', 'end')
@@ -103,14 +111,14 @@ class App:
         self.reload(result)
 
 
-def read_config():
-    config = ConfigParser()
-    config.read('config.ini')
-    try:
-        set_root(config.get('config', 'jar_path'))
-    except (NoSectionError, NoOptionError):
-        with open('config.ini', 'w') as file:
-            file.write('[config]\njar_path=../')
+# def read_config():
+#     config = ConfigParser()
+#     config.read('config.ini')
+#     try:
+#         set_root(config.get('config', 'jar_path'))
+#     except (NoSectionError, NoOptionError):
+#         with open('config.ini', 'w') as file:
+#             file.write('[config]\njar_path=../')
 
 
 # read_config()

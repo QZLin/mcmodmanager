@@ -66,18 +66,18 @@ def handle_file(handle_type, file):
         print('enable', file)
         try:
             rename(file + TYPE_DISABLED, file)
-        except FileNotFoundError:
-            print('err', 'rename %s->%s' % (file + TYPE_DISABLED, file))
-        except FileExistsError:
-            print('File:%s exist' % file)
+        except FileNotFoundError as err:
+            print(err)
+        except FileExistsError as err:
+            print(err)
     elif handle_type == DISABLE:
         print('disable', file)
         try:
             rename(file, file + TYPE_DISABLED)
-        except FileNotFoundError:
-            print('err', 'rename %s->%s' % (file, file + TYPE_DISABLED))
-        except FileExistsError:
-            print('File:%s exist' % file + TYPE_DISABLED)
+        except FileNotFoundError as err:
+            print(err)
+        except FileExistsError as err:
+            print(err)
 
 
 def compare(jars, jars_local):
