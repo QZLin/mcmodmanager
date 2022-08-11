@@ -1,4 +1,5 @@
 from os import walk, rename
+import json
 
 MOD_DIR = '../'
 SPLIT_CHAR = ':'
@@ -40,16 +41,13 @@ def get_jars(publish=False):
 
 
 def encode(jars):
-    code = SPLIT_CHAR.join(jars)
-    return code
+    data = {'jars': jars}
+    return json.dumps(data)
 
 
 def decode(code):
-    result = code.split(SPLIT_CHAR)
-    try:
-        result.remove('')
-    except ValueError:
-        pass
+    data = json.loads(code)
+    result = data['jars']
 
     return result
 

@@ -1,4 +1,3 @@
-# from configparser import ConfigParser, NoSectionError, NoOptionError
 from base64 import b64decode, b16encode
 from tkinter import BooleanVar, Frame, Checkbutton, Button, Text, END, Label, Tk, Canvas, Toplevel
 from tkinter.ttk import Scrollbar, Frame
