@@ -1,3 +1,4 @@
+import tkinter
 from base64 import b64decode, b16encode
 from tkinter import BooleanVar, Frame, Checkbutton, Button, Text, END, Label, Tk, Canvas, Toplevel
 from tkinter.ttk import Scrollbar, Frame
@@ -30,65 +31,79 @@ class Option:
 
 
 class App:
-
     def __init__(self, root, data=None):
         self.root = root
 
-        container = Frame(root)
+        self.container = Frame(root)
         ###
-        canvas = Canvas(container, height='18c')
-        scrollbar = Scrollbar(container, orient="vertical", command=canvas.yview)
+        self.canvas = Canvas(self.container, height='18c')
+        self.scrollbar = Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
 
-        self.scroll_frame = scroll_frame = Frame(canvas)
-        scroll_frame.bind(
+        self.scroll_frame = Frame(self.canvas)
+        self.scroll_frame.bind(
             "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
+            lambda e: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all")
             )
         )
-        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        self.canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
-        container.pack(fill='both')
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.container.pack(fill='both')
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
 
         ###
-        frame1 = Frame(scroll_frame)
-        a, b = get_jars()
-        for x in a:
-            opt = Option(frame1, x, True)
-        for x in b:
-            opt = Option(frame1, x[:-9])
-        frame1.pack()
+        self.frame_mods = Frame(self.scroll_frame)
+        # choices_var = tkinter.StringVar(value=a)
+        # listbox = tkinter.Listbox(self.frame_mods, selectmode='extended', listvariable=choices_var)
+        # listbox.pack(fill='both', expand=True)
+        self.frame_mods.pack()
         ###
 
         ###
-        frame2 = Frame(scroll_frame)
-        Button(frame2, text='关于About', command=self.wx_tk_49).pack(side='left')
-        bt_import = Button(frame2, text='导入Import', command=self.import_)
-        bt_export = Button(frame2, text='导出Export', command=self.publish)
+        self.frame_action = Frame(self.scroll_frame)
+        Button(self.frame_action, text='关于About', command=self.wx_tk_49).pack(side='left')
+        bt_import = Button(self.frame_action, text='导入Import', command=self.import_)
+        bt_export = Button(self.frame_action, text='导出Export', command=self.publish)
         bt_import.pack(side='left')
         bt_export.pack(side='right')
-        frame2.pack()
+        self.frame_action.pack()
         ###
 
-        self.text = Text(scroll_frame, height=5, width=54)
+        self.text = Text(self.scroll_frame, height=5, width=54)
         self.text.pack()
 
         if type(data) == dict:
             self.show_err(data['lost'])
 
+        self.update_mods()
+
+    def update_mods(self):
+        a, b = get_jars()
+
+        for x in a:
+            Option(self.frame_mods, x, True)
+        for x in b:
+            Option(self.frame_mods, x[:-9])
+
     @staticmethod
     def wx_tk_49():
         O0OOOO00OOOO0O000 = Toplevel()
-        O000O000O000O00O0 = Label(O0OOOO00OOOO0O000, text=b64decode(
-            b'TUMgTW9kIE1hbmFnZXIKTGljZW5zZTpHUEx2Mw' b'pCeSBRLlouTGluCm1haWw6cXpsaW4wMUAxNjMuY29t').decode())
-        O000O000O000O00O0['text'] = O000O000O000O00O0['text'] \
-            if b16encode(O000O000O000O00O0[
-                             'text'].encode()) == \
-               b'4D43204D6F64204D616E616765720A4' b'C6963656E73653A47504C76330A4279205' \
-               b'12E5A2E4C696E0A6D61696C3A717A6C696E3031403136332E636F6D' else ' '
+        O000O000O000O00O0 = \
+            Label(O0OOOO00OOOO0O000, text=b64decode(
+                b'TUMgTW9kIE1hbmFnZXIKTGljZW5zZTpHUEx2Mw'
+                b'pCeSBRLlouTGluCm1haWw6cXpsaW4wMUAxNjMuY29t'
+            ).decode())
+        O000O000O000O00O0['text'] = \
+            O000O000O000O00O0['text'] \
+                if b16encode(
+                O000O000O000O00O0['text'].encode()
+            ) == \
+                   b'4D43204D6F64204D616E616765720A4' \
+                   b'C6963656E73653A47504C76330A4279205' \
+                   b'12E5A2E4C696E0A6D61696C3A717A6C696E3031403136332E636F6D' \
+                else ' '
         O000O000O000O00O0.pack()
 
     def publish(self):
@@ -108,6 +123,8 @@ class App:
 
     def import_(self):
         code = self.text.get('1.0', END).replace('\n', '')
+        if code.strip() == '':
+            raise RuntimeError('No code')
         result = compare(decode(code), get_jars())
         self.reload(result)
 
