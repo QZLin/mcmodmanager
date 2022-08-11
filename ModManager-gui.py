@@ -2,7 +2,9 @@
 from base64 import b64decode, b16encode
 from tkinter import BooleanVar, Frame, Checkbutton, Button, Text, END, Label, Tk, Canvas, Toplevel
 from tkinter.ttk import Scrollbar, Frame
+import argparse
 
+import ModManager
 from ModManager import *
 
 TITLE = 'MC Mod Manager'
@@ -123,8 +125,17 @@ class App:
 
 # read_config()
 
-tk = Tk()
-tk.title(TITLE)
-app = App(tk)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--path', type=str, help='Path of minecraft mods')
 
-tk.mainloop()
+    args = parser.parse_args()
+
+    if args.path:
+        ModManager.MOD_DIR = parser.parse_args().path
+
+    tk = Tk()
+    tk.title(TITLE)
+    app = App(tk)
+
+    tk.mainloop()
