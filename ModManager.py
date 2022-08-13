@@ -101,6 +101,16 @@ def compare(jars, jars_local):
         return lost
 
 
+class Flags:
+    def __init__(self, type_):
+        self.type = type_
+
+
+def get_flag():
+    with open('flag.json', 'r'):
+        pass
+
+
 if __name__ == '__main__':
     try:
         mode = int(input('select mode:\n0 load[default]\n1 publish\nmode:'))
