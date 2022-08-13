@@ -34,66 +34,13 @@ class Option:
 
 
 class App:
-    def __init__(self, root, data=None):
-        self.root = root
-
-        self.container = Frame(root)
-        ###
-        self.canvas = Canvas(self.container, height='18c')
-        self.scrollbar = Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
-
-        self.scroll_frame = Frame(self.canvas)
-        self.scroll_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(
-                scrollregion=self.canvas.bbox("all")
-            )
-        )
-        self.canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
-
-        self.container.pack(fill='both', expand=True)
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
-
-        ###
-        self.frame_mods = Frame(self.scroll_frame)
-        self.var_mod_list = tkinter.Variable()
-        self.listbox_mod = tkinter.Listbox(
-            self.frame_mods, selectmode='extended', listvariable=self.var_mod_list, height=40)
-        self.listbox_mod.pack(fill='both', expand=True)
-        self.listbox_mod.bind('<<ListboxSelect>>', self.mod_list_changed)
-        self.frame_mods.grid(column=0, row=0, columnspan=2, rowspan=3, sticky='nsew')
-        ###
-
-        ###
-        self.frame_action = Frame(self.scroll_frame)
-        bt_import = Button(self.frame_action, text='导入Import', command=self.import_)
-        bt_export = Button(self.frame_action, text='导出Export', command=self.publish)
-        bt_about = Button(self.frame_action, text='关于About', command=self.wx_tk_49)
-        bt_import.grid(column=1, row=0, sticky='nsew')
-        bt_export.grid(column=2, row=0, sticky='nsew')
-        tkinter.Button(self.frame_action, text='Mark Server').grid(column=3, row=0)
-        tkinter.Button(self.frame_action, text='Mark Client').grid(column=4, row=0)
-        bt_about.grid(column=20, row=0, sticky='nsew')
-        self.frame_action.grid(column=0, row=4, columnspan=2)
-        ###
-
-        self.text = Text(self.scroll_frame, width=60)
-        self.text.grid()
-
-        if type(data) == dict:
-            self.show_err(data['lost'])
-
-        self.update_mods()
-
     def __init__(self, master=None):
         # build ui
         self.toplevel1 = tk.Tk() if master is None else tk.Toplevel(master)
         self.listbox_mods = tk.Listbox(self.toplevel1)
-        self.mods_list = tk.Variable(value=[])
+        self.var_modlist = tk.Variable(value=[])
         self.listbox_mods.configure(
-            height=30, listvariable=self.mods_list, selectmode="extended"
+            height=30, listvariable=self.var_modlist, selectmode="extended"
         )
         self.listbox_mods.pack(anchor="nw", expand=1, fill="both", side="top")
         self.frame_actions = ttk.Frame(self.toplevel1)
@@ -123,12 +70,74 @@ class App:
         # Main widget
         self.mainwindow = self.toplevel1
 
+        # Bind widget event
+        self.listbox_mods.bind('<<ListboxSelect>>', self.mod_list_changed)
+        # self.listbox_mods.bind('<Double-1>', self.mod_list_double_click)
+
+        # init status
+        self.manage_mode = True
+        self.modlist = []
+        self.mod_status = {}
+        #
+        self.modlist_last_selection = []
+        self.modlist_last_index = -1
+        self.modlist_last_select_text = None
+
+    def mod_list_double_click(self, event):
+        print(event)
+
     def mod_list_changed(self, event):
-        print(self.listbox_mods.get(ANCHOR))
+        selection = list(self.listbox_mods.curselection())
+
+        # print(selection)
+        # modlist: list = list(self.var_modlist.get())
+
+        def handle_index(index):
+            name = self.modlist[index]
+            self.mod_status[name] = not self.mod_status[name]
+            display = self.render_item(name, self.mod_status[name])
+            yv = self.listbox_mods.yview()
+            self.listbox_mods.delete(index)
+            self.listbox_mods.insert(index, display)
+            self.listbox_mods.yview_moveto(yv[0])
+
+            # def f(a=' ', b=' '): return modlist[index].replace(f'[{a}]', f'[{b}]', 1)
+            #
+            # modlist[index] = f(b='x') if (modlist[index][1] == ' ') else f('x')
+            # self.var_modlist.set(modlist)
+            self.modlist_last_index, self.modlist_last_select_text = index, display
+
+        if selection == self.modlist_last_selection and \
+                (clicked := self.listbox_mods.get(ANCHOR)) == self.modlist_last_select_text:
+            handle_index(self.modlist_last_index)
+
+        for i in [x for x in selection if x not in self.modlist_last_selection]:
+            handle_index(i)
+        # print('merge')
+        # all_selected = list(selection)
+        # all_selected.extend(self.last_selection)
+        # for i in [x for x in all_selected if x not in selection or x not in self.last_selection]:
+        #     print(modlist[i])
+        self.modlist_last_selection = selection
+
+    @staticmethod
+    def render_item(name, is_active=True):
+        return f'[{"x" if is_active else " "}] {name}'
 
     def update_mods(self):
         a, b = get_jars()
-        self.mods_list.set([f'[x] {x}' for x in a] + [f'[ ] {x}' for x in b])
+        modlist = list(a)
+        modlist.extend(b)
+        self.modlist = modlist
+        self.mod_status = {name: (name in a) for name in modlist}
+        for item in modlist:
+            self.listbox_mods.insert(self.listbox_mods.size(), self.render_item(item, self.mod_status[item]))
+
+        # for item in [f'[ ] {x}' for x in b]:
+        #     self.listbox_mods.insert(-1, item)
+        # for item in [f'[x] {x}' for x in a]:
+        #     self.listbox_mods.insert(-1, item)
+        # self.var_modlist.set([f'[x] {x}' for x in a] + [f'[ ] {x}' for x in b])
 
         # for x in a:
         #     Option(self.frame_mods, x, True)
