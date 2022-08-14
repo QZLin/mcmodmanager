@@ -13,24 +13,24 @@ from ModManager import *
 TITLE = 'MC Mod Manager'
 
 
-class Option:
-    def __init__(self, root, text, clicked=False):
-        self.text = text
-        self.states = BooleanVar(value=clicked)
-        self.check_button = Checkbutton(root, text=text,
-                                        command=self.change, variable=self.states)
-        self.check_button.pack(anchor='w')
-
-    def change(self):
-        text = self.text
-        states = self.states.get()
-        if states:
-            handle_file(ENABLE, text)
-        else:
-            handle_file(DISABLE, text)
-
-    def set_text(self, text):
-        self.check_button['text'] = self.text = text
+# class Option:
+#     def __init__(self, root, text, clicked=False):
+#         self.text = text
+#         self.states = BooleanVar(value=clicked)
+#         self.check_button = Checkbutton(root, text=text,
+#                                         command=self.change, variable=self.states)
+#         self.check_button.pack(anchor='w')
+#
+#     def change(self):
+#         text = self.text
+#         states = self.states.get()
+#         if states:
+#             handle_file(ENABLE, text)
+#         else:
+#             handle_file(DISABLE, text)
+#
+#     def set_text(self, text):
+#         self.check_button['text'] = self.text = text
 
 
 class App:
@@ -93,6 +93,8 @@ class App:
         self.modlist_last_index = -1
         self.modlist_last_select_text = None
 
+        self.manager = ModManager()
+
     def mod_list_double_click(self, event):
         print(event)
 
@@ -124,6 +126,7 @@ class App:
         # for i in [x for x in all_selected if x not in selection or x not in self.last_selection]:
         #     print(modlist[i])
         self.modlist_last_selection = selection
+        self.load_files()
 
     @staticmethod
     def render_item(name, is_active=True):
@@ -133,8 +136,12 @@ class App:
         self.entry_output.delete(0, tk.END)
         self.entry_output.insert(0, text)
 
+    def load_files(self):
+        pass
+        # self.manager = Manager()
+
     def update_mods(self):
-        a, b = get_jars()
+        a, b = self.manager.get_jars()
         modlist = list(a)
         modlist.extend(b)
         self.modlist = modlist
@@ -149,7 +156,7 @@ class App:
                 self.info(f'Manage Mode:{self.manage_mode}')
             case self.button_export:
                 self.tkinter_scrolled_text.delete('1.0', tk.END)
-                self.tkinter_scrolled_text.insert('1.0', encode(get_jars(True)))
+                self.tkinter_scrolled_text.insert('1.0', ModManager.encode(self.manager.get_jars(True)))
                 self.info('Exported...')
             case self.button_import:
                 pass
@@ -170,14 +177,14 @@ class App:
                                                            b'031403136332E636F6D' else ' '
         o000_o000_o000_o00_o0.grid()
 
-    def publish(self):
-        self.text.delete('1.0', 'end')
-        self.text.insert('1.0', encode(get_jars(True)))
+    # def publish(self):
+    #     self.text.delete('1.0', 'end')
+    #     self.text.insert('1.0', Manager.encode(get_jars(True)))
 
-    def show_err(self, result):
-        for x in result:
-            label = Label(self.scroll_frame, text='LostMod: ' + x, fg='red')
-            label.pack(anchor='w')
+    # def show_err(self, result):
+    #     for x in result:
+    #         label = Label(self.scroll_frame, text='LostMod: ' + x, fg='red')
+    #         label.pack(anchor='w')
 
     def reload(self, err_list=None):
         pass
@@ -186,12 +193,12 @@ class App:
         # self.root.title(TITLE)
         # App(self.root, {'lost': err_list} if type(err_list) == list else None)
 
-    def import_(self):
-        code = self.text.get('1.0', END)
-        if code.strip() == '':
-            raise RuntimeError('No code')
-        result = compare(decode(code), get_jars())
-        self.reload(result)
+    # def import_(self):
+    #     code = self.text.get('1.0', END)
+    #     if code.strip() == '':
+    #         raise RuntimeError('No code')
+    #     result = compare(decode(code), get_jars())
+    #     self.reload(result)
 
     def run(self):
         self.mainwindow.mainloop()
