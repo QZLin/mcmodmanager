@@ -36,43 +36,53 @@ class Option:
 class App:
     def __init__(self, master=None):
         # build ui
-        self.toplevel1 = tk.Tk() if master is None else tk.Toplevel(master)
-        self.listbox_mods = tk.Listbox(self.toplevel1)
+        self.toplevel = tk.Tk() if master is None else tk.Toplevel(master)
+        self.listbox_mods = tk.Listbox(self.toplevel)
         self.var_modlist = tk.Variable(value=[])
         self.listbox_mods.configure(
             height=30, listvariable=self.var_modlist, selectmode="extended"
         )
         self.listbox_mods.pack(anchor="nw", expand=1, fill="both", side="top")
-        self.frame_actions = ttk.Frame(self.toplevel1)
-        self.button1 = ttk.Button(self.frame_actions)
-        self.button1.configure(text="button1")
-        self.button1.pack(side="left")
+        self.listbox_mods.bind("<<ListboxSelect>>", self.mod_list_changed, add="")
+        self.frame_actions = ttk.Frame(self.toplevel)
+        self.button_manage_mode = ttk.Button(self.frame_actions)
+        self.button_manage_mode.configure(takefocus=False, text="Manage")
+        self.button_manage_mode.pack(side="left")
+        self.button_manage_mode.bind("<1>", self.callback, add="")
         self.button2 = ttk.Button(self.frame_actions)
-        self.button2.configure(text="button2")
+        self.button2.configure(text="Mark")
         self.button2.pack(side="left")
-        self.button3 = ttk.Button(self.frame_actions)
-        self.button3.configure(text="button3")
-        self.button3.pack(side="left")
-        self.button4 = ttk.Button(self.frame_actions)
-        self.button4.configure(text="button4")
-        self.button4.pack(side="left")
-        self.button5 = ttk.Button(self.frame_actions)
-        self.button5.configure(text="button5")
-        self.button5.pack(side="left")
+        self.button2.bind("<1>", self.callback, add="")
+        self.button_import = ttk.Button(self.frame_actions)
+        self.button_import.configure(text="Import")
+        self.button_import.pack(side="left")
+        self.button_import.bind("<1>", self.callback, add="")
+        self.button_export = ttk.Button(self.frame_actions)
+        self.button_export.configure(text="Export")
+        self.button_export.pack(side="left")
+        self.button_export.bind("<1>", self.callback, add="")
+        self.button_about = ttk.Button(self.frame_actions)
+        self.button_about.configure(text="About")
+        self.button_about.pack(side="left")
+        self.button_about.bind("<1>", self.callback, add="")
         self.frame_actions.configure(height=200, width=200)
         self.frame_actions.pack(expand=1, side="top")
-        self.tkinter_scrolled_text = ScrolledText(self.toplevel1)
+        self.tkinter_scrolled_text = ScrolledText(self.toplevel)
         self.tkinter_scrolled_text.configure(height=15, width=60)
         self.tkinter_scrolled_text.pack(expand=1, fill="x", side="top")
-        self.toplevel1.configure(height=200, width=200)
-        # self.toplevel1.bind("<MouseWheel>", self.callback, add="")
+        self.entry_output = ttk.Entry(self.toplevel)
+        self.entry_output.pack(expand=1, fill="x", side="bottom")
+        self.toplevel.configure(height=200, width=200)
+        self.toplevel.title("MC Mod Manager")
 
         # Main widget
-        self.mainwindow = self.toplevel1
+        self.mainwindow = self.toplevel
 
         # Bind widget event
-        self.listbox_mods.bind('<<ListboxSelect>>', self.mod_list_changed)
+        # self.listbox_mods.bind('<<ListboxSelect>>', self.mod_list_changed)
         # self.listbox_mods.bind('<Double-1>', self.mod_list_double_click)
+        # self.button_manage_mode.bind('<Button-1>', self.callback)
+        # self.button_export.bind('<Button-1>', self.callback)
 
         # init status
         self.manage_mode = True
@@ -87,10 +97,9 @@ class App:
         print(event)
 
     def mod_list_changed(self, event):
+        if not self.manage_mode:
+            return
         selection = list(self.listbox_mods.curselection())
-
-        # print(selection)
-        # modlist: list = list(self.var_modlist.get())
 
         def handle_index(index):
             name = self.modlist[index]
@@ -101,10 +110,6 @@ class App:
             self.listbox_mods.insert(index, display)
             self.listbox_mods.yview_moveto(yv[0])
 
-            # def f(a=' ', b=' '): return modlist[index].replace(f'[{a}]', f'[{b}]', 1)
-            #
-            # modlist[index] = f(b='x') if (modlist[index][1] == ' ') else f('x')
-            # self.var_modlist.set(modlist)
             self.modlist_last_index, self.modlist_last_select_text = index, display
 
         if selection == self.modlist_last_selection and \
@@ -124,6 +129,10 @@ class App:
     def render_item(name, is_active=True):
         return f'[{"x" if is_active else " "}] {name}'
 
+    def info(self, text):
+        self.entry_output.delete(0, tk.END)
+        self.entry_output.insert(0, text)
+
     def update_mods(self):
         a, b = get_jars()
         modlist = list(a)
@@ -133,16 +142,17 @@ class App:
         for item in modlist:
             self.listbox_mods.insert(self.listbox_mods.size(), self.render_item(item, self.mod_status[item]))
 
-        # for item in [f'[ ] {x}' for x in b]:
-        #     self.listbox_mods.insert(-1, item)
-        # for item in [f'[x] {x}' for x in a]:
-        #     self.listbox_mods.insert(-1, item)
-        # self.var_modlist.set([f'[x] {x}' for x in a] + [f'[ ] {x}' for x in b])
-
-        # for x in a:
-        #     Option(self.frame_mods, x, True)
-        # for x in b:
-        #     Option(self.frame_mods, x[:-9])
+    def callback(self, event):
+        match event.widget:
+            case self.button_manage_mode:
+                self.manage_mode = not self.manage_mode
+                self.info(f'Manage Mode:{self.manage_mode}')
+            case self.button_export:
+                self.tkinter_scrolled_text.delete('1.0', tk.END)
+                self.tkinter_scrolled_text.insert('1.0', encode(get_jars(True)))
+                self.info('Exported...')
+            case self.button_import:
+                pass
 
     @staticmethod
     def wx_tk_49():
@@ -208,8 +218,6 @@ if __name__ == '__main__':
     if args.path:
         ModManager.MOD_DIR = parser.parse_args().path
 
-    # main = Tk()
-    # main.title(TITLE)
     app = App()
     app.update_mods()
     app.run()

@@ -1,14 +1,15 @@
 <?xml version='1.0' encoding='utf-8'?>
 <interface version="1.2">
-  <object class="tk.Toplevel" id="toplevel1">
+  <object class="tk.Toplevel" id="toplevel">
     <property name="height">200</property>
+    <property name="title" translatable="yes">MC Mod Manager</property>
     <property name="width">200</property>
-    <bind sequence="&lt;MouseWheel&gt;" handler="callback" add="" />
     <child>
       <object class="tk.Listbox" id="listbox_mods">
         <property name="height">30</property>
         <property name="listvariable">string:var_modlist</property>
         <property name="selectmode">extended</property>
+        <bind sequence="&lt;&lt;ListboxSelect&gt;&gt;" handler="mod_list_changed" add="" />
         <layout manager="pack">
           <property name="anchor">nw</property>
           <property name="expand">true</property>
@@ -26,8 +27,10 @@
           <property name="side">top</property>
         </layout>
         <child>
-          <object class="ttk.Button" id="button1">
-            <property name="text" translatable="yes">button1</property>
+          <object class="ttk.Button" id="button_manage_mode">
+            <property name="takefocus">false</property>
+            <property name="text" translatable="yes">Manage</property>
+            <bind sequence="&lt;1&gt;" handler="callback" add="" />
             <layout manager="pack">
               <property name="side">left</property>
             </layout>
@@ -35,31 +38,35 @@
         </child>
         <child>
           <object class="ttk.Button" id="button2">
-            <property name="text" translatable="yes">button2</property>
+            <property name="text" translatable="yes">Mark</property>
+            <bind sequence="&lt;1&gt;" handler="callback" add="" />
             <layout manager="pack">
               <property name="side">left</property>
             </layout>
           </object>
         </child>
         <child>
-          <object class="ttk.Button" id="button3">
-            <property name="text" translatable="yes">button3</property>
+          <object class="ttk.Button" id="button_import">
+            <property name="text" translatable="yes">Import</property>
+            <bind sequence="&lt;1&gt;" handler="callback" add="" />
             <layout manager="pack">
               <property name="side">left</property>
             </layout>
           </object>
         </child>
         <child>
-          <object class="ttk.Button" id="button4">
-            <property name="text" translatable="yes">button4</property>
+          <object class="ttk.Button" id="button_export">
+            <property name="text" translatable="yes">Export</property>
+            <bind sequence="&lt;1&gt;" handler="callback" add="" />
             <layout manager="pack">
               <property name="side">left</property>
             </layout>
           </object>
         </child>
         <child>
-          <object class="ttk.Button" id="button5">
-            <property name="text" translatable="yes">button5</property>
+          <object class="ttk.Button" id="button_about">
+            <property name="text" translatable="yes">About</property>
+            <bind sequence="&lt;1&gt;" handler="callback" add="" />
             <layout manager="pack">
               <property name="side">left</property>
             </layout>
@@ -75,6 +82,15 @@
           <property name="expand">true</property>
           <property name="fill">x</property>
           <property name="side">top</property>
+        </layout>
+      </object>
+    </child>
+    <child>
+      <object class="ttk.Entry" id="entry_output">
+        <layout manager="pack">
+          <property name="expand">true</property>
+          <property name="fill">x</property>
+          <property name="side">bottom</property>
         </layout>
       </object>
     </child>
