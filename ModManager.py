@@ -111,7 +111,7 @@ class ModManager:
         #     self.mod_status[name] = not self.mod_status[name]
         #     self.filelist[mod_index] = self.ext_name(name, activate)
 
-    def handle_file(self, activate, file_name, rescan=True, **files):
+    def handle_file(self, activate: bool, file_name, rescan=True, **files):
         file = os.path.join(self.root, file_name)
 
         def _run():
@@ -148,16 +148,16 @@ class ModManager:
                 pass
             else:
                 if jar + TYPE_DISABLED in disables:
-                    self.handle_file(Action.ENABLE, jar)
+                    self.handle_file(True, jar)
                 else:
-                    self.handle_file(ERR_LOST, jar)
+                    self.handle_file(True, jar)
                     lost.append(jar)
         for jar in local_jars:
             # local jars contain unexpected jar or not
             if jar in targe_jar_rules:
                 pass
             else:
-                self.handle_file(Action.DISABLE, jar)
+                self.handle_file(False, jar)
         if len(lost) >= 1:
             return lost
 

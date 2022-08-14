@@ -85,7 +85,7 @@ class App:
         #
         self.mod_names = []
         self.modlist_last_selection = []
-        self.modlist_last_index = -1
+        self.modlist_last_index = None
         self.modlist_last_select_text = None
 
         self.manager: ModManager = mod_manager
@@ -99,6 +99,7 @@ class App:
         selection = list(self.listbox_mods.curselection())
 
         def handle_index(index):
+            print(index)
             name = self.mod_names[index]
             jar_name = name + TYPE_JAR
             file_name = ModManager.ext_name(jar_name, self.manager.mod_status[jar_name])
@@ -143,16 +144,11 @@ class App:
         # self.manager = Manager()
 
     def update_mods(self):
-        # a, b = self.manager.get_files()
-        # self.filelist = list(a)
-        # self.filelist.extend(b)
-        # modlist = self.manager.mod_names()
-        # self.modlist = modlist
-        # self.mod_status = {name: (name in a) for name in modlist}
+        self.mod_names.clear()
+        self.listbox_mods.delete(0, tk.END)
         for x in self.manager.modlist:
             name = ModManager.ext_replace(x, '.jar')
             self.mod_names.append(name)
-            # for x in self.manager.modlist:
             self.listbox_mods.insert(self.listbox_mods.size(), self.render_item(name, self.manager.mod_status[x]))
 
     def callback(self, event):
@@ -171,11 +167,19 @@ class App:
                     return
                 self.info('Imported...')
                 self.manager.load_rules(code)
-                self.reload()
+                self.toplevel.after(500, lambda: self.reload())
+                # self.reload()
                 # result = compare(decode(code), get_jars())
                 # self.reload(result)
             case self.button_about:
                 pass
+
+    def reload(self):
+        self.manager.scan()
+        self.update_mods()
+
+    def run(self):
+        self.mainwindow.mainloop()
 
     @staticmethod
     def wx_tk_49():
@@ -192,33 +196,6 @@ class App:
                                                            b'12E5A2E4C696E0A6D61696C3A717A6C696E3' \
                                                            b'031403136332E636F6D' else ' '
         o000_o000_o000_o00_o0.grid()
-
-    # def publish(self):
-    #     self.text.delete('1.0', 'end')
-    #     self.text.insert('1.0', Manager.encode(get_jars(True)))
-
-    # def show_err(self, result):
-    #     for x in result:
-    #         label = Label(self.scroll_frame, text='LostMod: ' + x, fg='red')
-    #         label.pack(anchor='w')
-
-    def reload(self, err_list=None):
-        self.manager.scan()
-        self.update_mods()
-        # self.root.destroy()
-        # self.root = Tk()
-        # self.root.title(TITLE)
-        # App(self.root, {'lost': err_list} if type(err_list) == list else None)
-
-    # def import_(self):
-    #     code = self.text.get('1.0', END)
-    #     if code.strip() == '':
-    #         raise RuntimeError('No code')
-    #     result = compare(decode(code), get_jars())
-    #     self.reload(result)
-
-    def run(self):
-        self.mainwindow.mainloop()
 
 
 # def read_config():
