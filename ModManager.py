@@ -9,15 +9,43 @@ TYPE_JAR = '.jar'
 TYPE_DISABLED = '.disabled'
 
 ERR_LOST = 0
-ENABLE = 1
-DISABLE = 2
+
+
+class Action:
+    ENABLE = 1
+    DISABLE = 2
 
 
 class ModManager:
     def __init__(self, root='.'):
         self.root = root
 
-    def get_jars(self, publish=False):
+    @staticmethod
+    def match_ext(name, extension, match_case=False):
+        if len(name) < len(extension):
+            return False
+        if match_case:
+            if name[-len(extension):].lower() == extension.lower():
+                return True
+        else:
+            if name[-len(extension):] == extension:
+                return True
+        return False
+
+    @staticmethod
+    def ext_name(name, active=True):
+        if not active and len(name) >= len(TYPE_JAR) \
+                and name[-len(TYPE_JAR):] == TYPE_JAR:
+            return name + TYPE_DISABLED
+        elif active and len(name) >= len(TYPE_DISABLED) \
+                and name[-len(TYPE_DISABLED):] == TYPE_DISABLED:
+            return name[:-len(TYPE_DISABLED)]
+        return name
+
+    def scan(self):
+        pass
+
+    def get_files(self, publish=False):
         jars, disables = [], []
 
         def _handle(file_name):
@@ -33,6 +61,14 @@ class ModManager:
             break
         return jars if publish else (jars, disables)
 
+    def mod_names(self):
+        names = []
+        a, b = self.get_files()
+        names.extend(a)
+        names.extend([self.ext_name(x, True) for x in b])
+        # return [x[-len(TYPE_JAR):] for x in a], [x[-len(TYPE_DISABLED):] for x in b]
+        return names
+
     @staticmethod
     def encode(jars):
         data = {'jars': jars}
@@ -44,23 +80,24 @@ class ModManager:
         result = data['jars']
         return result
 
-    @staticmethod
-    def handle_file(action, file, **files):
+    def handle_file(self, activate, file_name, **files):
+        file = os.path.join(self.root, file_name)
+
         def _run():
-            if action == ERR_LOST:
-                print('lost', file)
-            elif action == ENABLE:
+            # if action == ERR_LOST:
+            #     print('lost', file)
+            if activate:
                 print('enable', file)
                 try:
-                    os.rename(file + TYPE_DISABLED, file)
+                    os.rename(file, ModManager.ext_name(file, True))
                 except FileNotFoundError as err:
                     print(err)
                 except FileExistsError as err:
                     print(err)
-            elif action == DISABLE:
+            else:
                 print('disable', file)
                 try:
-                    os.rename(file, file + TYPE_DISABLED)
+                    os.rename(file, ModManager.ext_name(file, False))
                 except FileNotFoundError as err:
                     print(err)
                 except FileExistsError as err:
@@ -79,7 +116,7 @@ class ModManager:
                 pass
             else:
                 if jar + TYPE_DISABLED in disables:
-                    ModManager.handle_file(ENABLE, jar)
+                    ModManager.handle_file(Action.ENABLE, jar)
                 else:
                     ModManager.handle_file(ERR_LOST, jar)
                     lost.append(jar)
@@ -88,7 +125,7 @@ class ModManager:
             if jar in targe_jar_rules:
                 pass
             else:
-                ModManager.handle_file(DISABLE, jar)
+                ModManager.handle_file(Action.DISABLE, jar)
         if len(lost) >= 1:
             return lost
 
@@ -112,7 +149,7 @@ if __name__ == '__main__':
     manager = ModManager()
     if mode == 0:
         txt = input('code:')
-        ModManager.compare(ModManager.decode(txt), manager.get_jars())
+        ModManager.compare(ModManager.decode(txt), manager.get_files())
     elif mode == 1:
-        txt = ModManager.encode(manager.get_jars(publish=True))
+        txt = ModManager.encode(manager.get_files(publish=True))
         print(txt)

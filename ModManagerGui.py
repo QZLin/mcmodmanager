@@ -34,7 +34,7 @@ TITLE = 'MC Mod Manager'
 
 
 class App:
-    def __init__(self, master=None):
+    def __init__(self, master=None, mod_manager=None):
         # build ui
         self.toplevel = tk.Tk() if master is None else tk.Toplevel(master)
         self.listbox_mods = tk.Listbox(self.toplevel)
@@ -87,13 +87,14 @@ class App:
         # init status
         self.manage_mode = True
         self.modlist = []
+        self.filelist = []
         self.mod_status = {}
         #
         self.modlist_last_selection = []
         self.modlist_last_index = -1
         self.modlist_last_select_text = None
 
-        self.manager = ModManager()
+        self.manager: ModManager = mod_manager
 
     def mod_list_double_click(self, event):
         print(event)
@@ -106,11 +107,15 @@ class App:
         def handle_index(index):
             name = self.modlist[index]
             self.mod_status[name] = not self.mod_status[name]
+
             display = self.render_item(name, self.mod_status[name])
             yv = self.listbox_mods.yview()
             self.listbox_mods.delete(index)
             self.listbox_mods.insert(index, display)
             self.listbox_mods.yview_moveto(yv[0])
+
+            self.manager.handle_file(self.mod_status[name], self.filelist[index])
+            self.filelist[index] = self.manager.ext_name(self.filelist[index], self.mod_status[name])
 
             self.modlist_last_index, self.modlist_last_select_text = index, display
 
@@ -141,9 +146,10 @@ class App:
         # self.manager = Manager()
 
     def update_mods(self):
-        a, b = self.manager.get_jars()
-        modlist = list(a)
-        modlist.extend(b)
+        a, b = self.manager.get_files()
+        self.filelist = list(a)
+        self.filelist.extend(b)
+        modlist = self.manager.mod_names()
         self.modlist = modlist
         self.mod_status = {name: (name in a) for name in modlist}
         for item in modlist:
@@ -156,7 +162,7 @@ class App:
                 self.info(f'Manage Mode:{self.manage_mode}')
             case self.button_export:
                 self.tkinter_scrolled_text.delete('1.0', tk.END)
-                self.tkinter_scrolled_text.insert('1.0', ModManager.encode(self.manager.get_jars(True)))
+                self.tkinter_scrolled_text.insert('1.0', ModManager.encode(self.manager.get_files(True)))
                 self.info('Exported...')
             case self.button_import:
                 pass
@@ -218,13 +224,13 @@ class App:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--path', type=str, help='Path of minecraft mods')
+    parser.add_argument('-p', '--path', type=str, default='.', help='Path of minecraft mods')
 
     args = parser.parse_args()
 
-    if args.path:
-        ModManager.MOD_DIR = parser.parse_args().path
+    # if args.path:
+    #     ModManager.MOD_DIR = parser.parse_args().path
 
-    app = App()
+    app = App(mod_manager=ModManager(args.path))
     app.update_mods()
     app.run()
