@@ -19,6 +19,10 @@ class Action:
 class ModManager:
     def __init__(self, root='.'):
         self.root = root
+        self.modlist = []  # jar name
+        self.filelist = []  # file name
+        self.mod_status = {}  # jar name : bool
+        self.scan()
 
     @staticmethod
     def match_ext(name, extension, match_case=False):
@@ -33,6 +37,12 @@ class ModManager:
         return False
 
     @staticmethod
+    def ext_replace(name, ext, target_ext='') -> str:
+        length = len(ext)
+        if len(name) >= length and name[-length:] == ext:
+            return name[:-length] + target_ext
+
+    @staticmethod
     def ext_name(name, active=True):
         if not active and len(name) >= len(TYPE_JAR) \
                 and name[-len(TYPE_JAR):] == TYPE_JAR:
@@ -42,10 +52,24 @@ class ModManager:
             return name[:-len(TYPE_DISABLED)]
         return name
 
-    def scan(self):
-        pass
+    def switch_active(self, name):
+        self.mod_status[name] = not self.mod_status[name]
 
-    def get_files(self, publish=False):
+    def scan(self):
+        a, b = self.get_files()
+        a.sort()
+        b.sort()
+
+        self.filelist = a.copy()
+        self.filelist.extend(b)
+
+        self.modlist = a.copy()
+        self.modlist.extend([self.ext_name(x, True) for x in b])
+
+        self.mod_status = {x: True for x in a}
+        self.mod_status.update({self.ext_name(x, True): False for x in b})
+
+    def get_files(self, publish=False) -> (list, list):
         jars, disables = [], []
 
         def _handle(file_name):
@@ -59,15 +83,15 @@ class ModManager:
                 for name in files:
                     _handle(name)
             break
-        return jars if publish else (jars, disables)
+        return jars, disables
 
-    def mod_names(self):
-        names = []
-        a, b = self.get_files()
-        names.extend(a)
-        names.extend([self.ext_name(x, True) for x in b])
-        # return [x[-len(TYPE_JAR):] for x in a], [x[-len(TYPE_DISABLED):] for x in b]
-        return names
+    # def mod_names(self):
+    #     names = []
+    #     a, b = self.get_files()
+    #     names.extend(a)
+    #
+    #     # return [x[-len(TYPE_JAR):] for x in a], [x[-len(TYPE_DISABLED):] for x in b]
+    #     return names
 
     @staticmethod
     def encode(jars):
@@ -80,7 +104,14 @@ class ModManager:
         result = data['jars']
         return result
 
-    def handle_file(self, activate, file_name, **files):
+    def handle_mod(self, activate, mod_index):
+        name = self.filelist[mod_index]
+        self.handle_file(activate, name)
+        # if rescan:
+        #     self.mod_status[name] = not self.mod_status[name]
+        #     self.filelist[mod_index] = self.ext_name(name, activate)
+
+    def handle_file(self, activate, file_name, rescan=True, **files):
         file = os.path.join(self.root, file_name)
 
         def _run():
@@ -102,12 +133,13 @@ class ModManager:
                     print(err)
                 except FileExistsError as err:
                     print(err)
+            if rescan:
+                self.scan()
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
 
-    @staticmethod
-    def compare(targe_jar_rules, local_jar_files):
+    def compare(self, targe_jar_rules, local_jar_files):
         local_jars, disables = local_jar_files
         lost = []
         for jar in targe_jar_rules:
@@ -116,16 +148,16 @@ class ModManager:
                 pass
             else:
                 if jar + TYPE_DISABLED in disables:
-                    ModManager.handle_file(Action.ENABLE, jar)
+                    self.handle_file(Action.ENABLE, jar)
                 else:
-                    ModManager.handle_file(ERR_LOST, jar)
+                    self.handle_file(ERR_LOST, jar)
                     lost.append(jar)
         for jar in local_jars:
             # local jars contain unexpected jar or not
             if jar in targe_jar_rules:
                 pass
             else:
-                ModManager.handle_file(Action.DISABLE, jar)
+                self.handle_file(Action.DISABLE, jar)
         if len(lost) >= 1:
             return lost
 
@@ -136,6 +168,10 @@ class ModManager:
     def get_flag(self):
         with open(join(self.root, 'flag.json'), 'r'):
             pass
+
+    def load_rules(self, code):
+        rules = json.loads(code)
+        self.compare(rules['jars'], self.get_files())
 
 
 if __name__ == '__main__':

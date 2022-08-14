@@ -1,13 +1,9 @@
-import tkinter
+import argparse
 import tkinter as tk
 import tkinter.ttk as ttk
 from base64 import b64decode, b16encode
-from tkinter import BooleanVar, Frame, Checkbutton, Button, Text, END, Label, Tk, Canvas, Toplevel, ANCHOR
 from tkinter.scrolledtext import ScrolledText
-from tkinter.ttk import Scrollbar, Frame
-import argparse
 
-import ModManager
 from ModManager import *
 
 TITLE = 'MC Mod Manager'
@@ -86,10 +82,8 @@ class App:
 
         # init status
         self.manage_mode = True
-        self.modlist = []
-        self.filelist = []
-        self.mod_status = {}
         #
+        self.mod_names = []
         self.modlist_last_selection = []
         self.modlist_last_index = -1
         self.modlist_last_select_text = None
@@ -105,22 +99,25 @@ class App:
         selection = list(self.listbox_mods.curselection())
 
         def handle_index(index):
-            name = self.modlist[index]
-            self.mod_status[name] = not self.mod_status[name]
+            name = self.mod_names[index]
+            jar_name = name + TYPE_JAR
+            file_name = ModManager.ext_name(jar_name, self.manager.mod_status[jar_name])
+            #
+            self.manager.switch_active(jar_name)
+            status = self.manager.mod_status[jar_name]
 
-            display = self.render_item(name, self.mod_status[name])
+            display = self.render_item(name, status)
             yv = self.listbox_mods.yview()
             self.listbox_mods.delete(index)
             self.listbox_mods.insert(index, display)
             self.listbox_mods.yview_moveto(yv[0])
 
-            self.manager.handle_file(self.mod_status[name], self.filelist[index])
-            self.filelist[index] = self.manager.ext_name(self.filelist[index], self.mod_status[name])
+            self.manager.handle_file(status, file_name)
 
             self.modlist_last_index, self.modlist_last_select_text = index, display
 
         if selection == self.modlist_last_selection and \
-                (clicked := self.listbox_mods.get(ANCHOR)) == self.modlist_last_select_text:
+                (self.listbox_mods.get(tk.ANCHOR)) == self.modlist_last_select_text:
             handle_index(self.modlist_last_index)
 
         for i in [x for x in selection if x not in self.modlist_last_selection]:
@@ -146,14 +143,17 @@ class App:
         # self.manager = Manager()
 
     def update_mods(self):
-        a, b = self.manager.get_files()
-        self.filelist = list(a)
-        self.filelist.extend(b)
-        modlist = self.manager.mod_names()
-        self.modlist = modlist
-        self.mod_status = {name: (name in a) for name in modlist}
-        for item in modlist:
-            self.listbox_mods.insert(self.listbox_mods.size(), self.render_item(item, self.mod_status[item]))
+        # a, b = self.manager.get_files()
+        # self.filelist = list(a)
+        # self.filelist.extend(b)
+        # modlist = self.manager.mod_names()
+        # self.modlist = modlist
+        # self.mod_status = {name: (name in a) for name in modlist}
+        for x in self.manager.modlist:
+            name = ModManager.ext_replace(x, '.jar')
+            self.mod_names.append(name)
+            # for x in self.manager.modlist:
+            self.listbox_mods.insert(self.listbox_mods.size(), self.render_item(name, self.manager.mod_status[x]))
 
     def callback(self, event):
         match event.widget:
@@ -162,15 +162,25 @@ class App:
                 self.info(f'Manage Mode:{self.manage_mode}')
             case self.button_export:
                 self.tkinter_scrolled_text.delete('1.0', tk.END)
-                self.tkinter_scrolled_text.insert('1.0', ModManager.encode(self.manager.get_files(True)))
+                self.tkinter_scrolled_text.insert('1.0', ModManager.encode(self.manager.get_files()[0]))
                 self.info('Exported...')
             case self.button_import:
+                code = self.tkinter_scrolled_text.get('1.0', tk.END)
+                if code.strip() == '':
+                    self.info("Input code please...")
+                    return
+                self.info('Imported...')
+                self.manager.load_rules(code)
+                self.reload()
+                # result = compare(decode(code), get_jars())
+                # self.reload(result)
+            case self.button_about:
                 pass
 
     @staticmethod
     def wx_tk_49():
-        o0_oooo00_oooo0_o000 = Toplevel()
-        o000_o000_o000_o00_o0 = Label(
+        o0_oooo00_oooo0_o000 = tk.Toplevel()
+        o000_o000_o000_o00_o0 = tk.Label(
             o0_oooo00_oooo0_o000, text=b64decode(
                 b'TUMgTW9kIE1hbmFnZXIKTGljZW5zZTpHUEx2Mw'
                 b'pCeSBRLlouTGluCm1haWw6cXpsaW4wMUAxNjMuY29t'
@@ -193,7 +203,8 @@ class App:
     #         label.pack(anchor='w')
 
     def reload(self, err_list=None):
-        pass
+        self.manager.scan()
+        self.update_mods()
         # self.root.destroy()
         # self.root = Tk()
         # self.root.title(TITLE)
