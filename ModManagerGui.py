@@ -45,10 +45,10 @@ class App:
         self.button_manage_mode.configure(takefocus=False, text="Manage")
         self.button_manage_mode.pack(side="left")
         self.button_manage_mode.bind("<1>", self.callback, add="")
-        self.button2 = ttk.Button(self.frame_actions)
-        self.button2.configure(text="Mark")
-        self.button2.pack(side="left")
-        self.button2.bind("<1>", self.callback, add="")
+        self.button_reload = ttk.Button(self.frame_actions)
+        self.button_reload.configure(text="Reload")
+        self.button_reload.pack(side="left")
+        self.button_reload.bind("<1>", self.callback, add="")
         self.button_import = ttk.Button(self.frame_actions)
         self.button_import.configure(text="Import")
         self.button_import.pack(side="left")
@@ -99,7 +99,7 @@ class App:
         selection = list(self.listbox_mods.curselection())
 
         def handle_index(index):
-            print(index)
+            # print(index)
             name = self.mod_names[index]
             jar_name = name + TYPE_JAR
             file_name = ModManager.ext_name(jar_name, self.manager.mod_status[jar_name])
@@ -156,6 +156,8 @@ class App:
             case self.button_manage_mode:
                 self.manage_mode = not self.manage_mode
                 self.info(f'Manage Mode:{self.manage_mode}')
+            case self.button_reload:
+                self.reload()
             case self.button_export:
                 self.tkinter_scrolled_text.delete('1.0', tk.END)
                 self.tkinter_scrolled_text.insert('1.0', ModManager.encode(self.manager.get_files()[0]))
@@ -168,9 +170,6 @@ class App:
                 self.info('Imported...')
                 self.manager.load_rules(code)
                 self.toplevel.after(500, lambda: self.reload())
-                # self.reload()
-                # result = compare(decode(code), get_jars())
-                # self.reload(result)
             case self.button_about:
                 pass
 

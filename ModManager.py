@@ -28,7 +28,7 @@ class ModManager:
     def match_ext(name, extension, match_case=False):
         if len(name) < len(extension):
             return False
-        if match_case:
+        if not match_case:
             if name[-len(extension):].lower() == extension.lower():
                 return True
         else:
@@ -69,7 +69,7 @@ class ModManager:
         self.mod_status = {x: True for x in a}
         self.mod_status.update({self.ext_name(x, True): False for x in b})
 
-    def get_files(self, publish=False) -> (list, list):
+    def get_files(self) -> (list, list):
         jars, disables = [], []
 
         def _handle(file_name):
@@ -84,14 +84,6 @@ class ModManager:
                     _handle(name)
             break
         return jars, disables
-
-    # def mod_names(self):
-    #     names = []
-    #     a, b = self.get_files()
-    #     names.extend(a)
-    #
-    #     # return [x[-len(TYPE_JAR):] for x in a], [x[-len(TYPE_DISABLED):] for x in b]
-    #     return names
 
     @staticmethod
     def encode(jars):
@@ -115,24 +107,13 @@ class ModManager:
         file = os.path.join(self.root, file_name)
 
         def _run():
-            # if action == ERR_LOST:
-            #     print('lost', file)
-            if activate:
-                print('enable', file)
-                try:
-                    os.rename(file, ModManager.ext_name(file, True))
-                except FileNotFoundError as err:
-                    print(err)
-                except FileExistsError as err:
-                    print(err)
-            else:
-                print('disable', file)
-                try:
-                    os.rename(file, ModManager.ext_name(file, False))
-                except FileNotFoundError as err:
-                    print(err)
-                except FileExistsError as err:
-                    print(err)
+            print(f'{"Enable" if activate else "Disable"} {file_name}')
+            try:
+                os.rename(file, ModManager.ext_name(file, activate))
+            except FileNotFoundError as err:
+                print(err)
+            except FileExistsError as err:
+                print(err)
             if rescan:
                 self.scan()
 
@@ -144,26 +125,19 @@ class ModManager:
         lost = []
         for jar in targe_jar_rules:
             # (jar in code) in local or not
-            if jar in local_jars:
-                pass
-            else:
-                if jar + TYPE_DISABLED in disables:
-                    self.handle_file(True, jar)
+            if jar not in local_jars:
+                if (file := jar + TYPE_DISABLED) in disables:
+                    self.handle_file(True, file, rescan=False)
                 else:
-                    self.handle_file(True, jar)
+                    self.handle_file(True, file, rescan=False)
                     lost.append(jar)
         for jar in local_jars:
             # local jars contain unexpected jar or not
-            if jar in targe_jar_rules:
-                pass
-            else:
-                self.handle_file(False, jar)
+            if jar not in targe_jar_rules:
+                self.handle_file(False, jar, rescan=False)
+        self.scan()
         if len(lost) >= 1:
             return lost
-
-        # class Flags:
-        #     def __init__(self, type_):
-        #         self.type = type_
 
     def get_flag(self):
         with open(join(self.root, 'flag.json'), 'r'):
@@ -187,5 +161,5 @@ if __name__ == '__main__':
         txt = input('code:')
         ModManager.compare(ModManager.decode(txt), manager.get_files())
     elif mode == 1:
-        txt = ModManager.encode(manager.get_files(publish=True))
+        txt = ModManager.encode(manager.get_files())
         print(txt)

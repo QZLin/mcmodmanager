@@ -37,8 +37,8 @@
           </object>
         </child>
         <child>
-          <object class="ttk.Button" id="button2">
-            <property name="text" translatable="yes">Mark</property>
+          <object class="ttk.Button" id="button_reload">
+            <property name="text" translatable="yes">Reload</property>
             <bind sequence="&lt;1&gt;" handler="callback" add="" />
             <layout manager="pack">
               <property name="side">left</property>
