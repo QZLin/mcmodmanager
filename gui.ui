@@ -19,9 +19,48 @@
       </object>
     </child>
     <child>
+      <object class="ttk.Frame" id="frame_flags">
+        <layout manager="pack">
+          <property name="side">top</property>
+        </layout>
+        <child>
+          <object class="ttk.Checkbutton" id="checkbutton_server">
+            <property name="text" translatable="yes">Server</property>
+            <property name="textvariable">int:flag_server</property>
+            <layout manager="pack">
+              <property name="side">left</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Checkbutton" id="checkbutton_client">
+            <property name="text" translatable="yes">Client</property>
+            <property name="textvariable">int:flag_client</property>
+            <layout manager="pack">
+              <property name="side">left</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Checkbutton" id="checkbutton_hram">
+            <property name="text" translatable="yes">HighRam</property>
+            <layout manager="pack">
+              <property name="side">left</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Checkbutton" id="checkbutton_lram">
+            <property name="text" translatable="yes">LowRam</property>
+            <layout manager="pack">
+              <property name="side">left</property>
+            </layout>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
       <object class="ttk.Frame" id="frame_actions">
-        <property name="height">200</property>
-        <property name="width">200</property>
         <layout manager="pack">
           <property name="expand">true</property>
           <property name="side">top</property>
