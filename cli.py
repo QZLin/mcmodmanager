@@ -1,13 +1,15 @@
 import enum
+import json
+import logging as log
 import os
 import re
 import shutil
+import sys
 import zipfile
-import json
 from enum import Enum
 from os.path import join, exists, islink
-import logging as log
 
+import argparse
 import click as cl
 from click import echo
 
@@ -43,16 +45,16 @@ def dict_safe_get(dictionary, *keys, obj=None):
     return next_obj
 
 
-def confirm_key_obj(dictionary, obj, keys: list):
-    key = keys[0]
-    if key not in dictionary.keys():
-        next_obj = dictionary[key] = obj if len(keys) == 1 else {}
-    else:
-        next_obj = dictionary[key]
-    if len(keys) <= 1:
-        return next_obj
-    else:
-        return confirm_key_obj(next_obj, obj, keys[1:])
+# def confirm_key_obj(dictionary, obj, keys: list):
+#     key = keys[0]
+#     if key not in dictionary.keys():
+#         next_obj = dictionary[key] = obj if len(keys) == 1 else {}
+#     else:
+#         next_obj = dictionary[key]
+#     if len(keys) <= 1:
+#         return next_obj
+#     else:
+#         return confirm_key_obj(next_obj, obj, keys[1:])
 
 
 def gen_metadata(library_dir, output_dir):
@@ -60,6 +62,7 @@ def gen_metadata(library_dir, output_dir):
         for file in filenames:
             if file.endswith('.json'):
                 os.remove(join(dir_metadata, file))
+        break
 
     files = []
     for root, dirs, filenames in os.walk(library_dir):
@@ -70,7 +73,7 @@ def gen_metadata(library_dir, output_dir):
     for file in files:
         try:
             archive_file = zipfile.ZipFile(join(library_dir, file))
-            info = archive_file.read('fabric.mod.json')
+            file_info = archive_file.read('fabric.mod.json')
         except zipfile.BadZipFile:
             print(f'NotZip:{file}')
             continue
@@ -78,8 +81,9 @@ def gen_metadata(library_dir, output_dir):
             print(f'NoInfo:{file}')
             continue
         with open(join(output_dir, f'{file}.json'), 'wb') as f:
-            f.write(info)
+            f.write(file_info)
             jars.append(file)
+    return jars
 
 
 def read_metadata(dir_, cache=join(dir_conf, 'metadata.json'), rebuild=False):
@@ -101,16 +105,22 @@ def read_metadata(dir_, cache=join(dir_conf, 'metadata.json'), rebuild=False):
     return metadata
 
 
+class RuleMode(Enum):
+    APPEND = enum.auto()
+    EXCEPT = enum.auto()
+
+
 def read_rules(rule_file=join(dir_conf, 'rules.json')) -> dict:
     if not exists(rule_file):
         write_rules({}, rule_file)
+        return {}
     with open(rule_file) as f:
         return json.load(f)
 
 
 def write_rules(rule: dict, rule_file=join(dir_conf, 'rules.json')):
     with open(rule_file, 'w') as f:
-        json.dump(rule, f, indent=4)
+        json.dump(rule, f, indent=2)
 
 
 def get_lib_info(metadata: dict):
@@ -128,10 +138,10 @@ def get_lib_info(metadata: dict):
 
 @cli.command('init')
 def init_():
-    init()
+    init_dir()
 
 
-def init():
+def init_dir():
     dirs = [mods_available, mods_enabled, dir_conf, dir_metadata]
     for x in dirs:
         if not exists(x):
@@ -188,7 +198,7 @@ def enable(mod_id, index, auto):
             mod_file = versions[index]
         elif auto:
             rules = read_rules()
-            blocked = confirm_key_obj(rules, [], [mod_id, 'block'])
+            blocked = dict_safe_get(rules, mod_id, 'block')
             i = len(versions) - 1
             while True:
                 mod_file = versions[i]
@@ -234,11 +244,9 @@ def block(file):
     echo(f'Block {file} of [{name}]')
     data = read_rules()
 
-    obj = confirm_key_obj(data, [], [name, 'block'])
+    obj = dict_safe_get(data, name, 'block')
     if file not in obj:
         obj.append(file)
-    # data.update({name: {'block': block_list}})
-    # data[name]['block'].append(file)
     write_rules(data)
 
 
@@ -301,12 +309,6 @@ def versions_(name):
     echo(data[name])
 
 
-# noinspection PyArgumentList
-class RuleMode(Enum):
-    APPEND = enum.auto()
-    EXCEPT = enum.auto()
-
-
 @cli.command('apply')
 @cl.argument('rules_with_mode', metavar='rules', nargs=-1)
 # @cl.option('-a', '--rules-append', multiple=True)
@@ -344,15 +346,64 @@ def apply(ruleset, pre_add_all=True):
     print(ids)
 
 
+# --add -r client --except -r server
+def parse_rule_statement(statements):
+    for statement in statements:
+        pass
+
+
+class OrderedArgsAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        arg_list = getattr(namespace, 'ordered_args', None)
+        if arg_list is None:
+            arg_list = []
+            setattr(namespace, 'ordered_args', arg_list)
+        arg_list.append({'option': option_string, 'value': values})
+
+
+def gen_rule(args):
+    map_data = list_()
+    result = []
+    result.extend(map_data.keys())
+    rule_data = read_rules()
+
+    parsar1 = argparse.ArgumentParser()
+    parsar1.add_argument('-a', '--append', nargs='?', action=OrderedArgsAction, const=str)
+    parsar1.add_argument('-e', '--exclude', nargs='?', action=OrderedArgsAction, const=str)
+    parsar1.add_argument('-c', '--current', nargs='?', action=OrderedArgsAction, const=str)
+    parsar1.add_argument('-n', '--name')
+    args1 = parsar1.parse_args(args[0])
+    print(args1)
+    for args_ in args1.ordered_args:
+        match args_['option']:
+            case '-a' | '--append':
+                rule = rule_data['ruleset'][args_['value']]
+                result.extend(y for y in rule if y not in result)
+            case '-e' | '--exclude':
+                rule = rule_data['ruleset'][args_['value']]
+                for y in rule:
+                    if y not in result:
+                        continue
+                    result.remove(y)
+            case '-c' | '--current':
+                mods = []
+                for root, dirs, filenames in os.walk('.'):
+                    mods.extend([x.rstrip('.jar') for x in filenames if x.endswith('.jar')])
+                    break
+                result.extend(y for y in mods if y not in result)
+
+    echo(result)
+
+
 def save(rule_name):
     mods = []
     for root, dirs, filenames in os.walk('.'):
         mods.extend([x.rstrip('.jar') for x in filenames if x.endswith('.jar')])
         break
     rules = read_rules()
-    r = dict_safe_get(rules, 'ruleset', rule_name)
-    r.clear()
-    r.extend(mods)
+    mod_rule = dict_safe_get(rules, 'ruleset', rule_name)
+    mod_rule.clear()
+    mod_rule.extend(mods)
     write_rules(rules)
     print(f'{rule_name}:{mods}')
 
@@ -396,4 +447,12 @@ def select_(pattern):
 
 
 if __name__ == '__main__':
-    cli(obj={})
+    log.getLogger()
+
+    pre_parser = argparse.ArgumentParser()
+    pre_parser.add_argument('command', default=None)
+    pre_args = pre_parser.parse_known_args()
+    if pre_args[0].command == 'gen-rule':
+        gen_rule(pre_args[1:])
+    else:
+        cli(obj={})
