@@ -1,15 +1,14 @@
+import argparse
 import enum
 import json
 import logging as log
 import os
 import re
 import shutil
-import sys
 import zipfile
 from enum import Enum
 from os.path import join, exists, islink
 
-import argparse
 import click as cl
 from click import echo
 
@@ -45,18 +44,6 @@ def dict_safe_get(dictionary, *keys, obj=None):
     return next_obj
 
 
-# def confirm_key_obj(dictionary, obj, keys: list):
-#     key = keys[0]
-#     if key not in dictionary.keys():
-#         next_obj = dictionary[key] = obj if len(keys) == 1 else {}
-#     else:
-#         next_obj = dictionary[key]
-#     if len(keys) <= 1:
-#         return next_obj
-#     else:
-#         return confirm_key_obj(next_obj, obj, keys[1:])
-
-
 def gen_metadata(library_dir, output_dir):
     for root, dirs, filenames in os.walk(dir_metadata):
         for file in filenames:
@@ -75,10 +62,10 @@ def gen_metadata(library_dir, output_dir):
             archive_file = zipfile.ZipFile(join(library_dir, file))
             file_info = archive_file.read('fabric.mod.json')
         except zipfile.BadZipFile:
-            print(f'NotZip:{file}')
+            log.info(f'NotZip:{file}')
             continue
         except KeyError:
-            print(f'NoInfo:{file}')
+            log.warning(f'NoInfo:{file}')
             continue
         with open(join(output_dir, f'{file}.json'), 'wb') as f:
             f.write(file_info)
@@ -176,47 +163,54 @@ def deploy(target_directory):
     print(mods)
 
 
-def enable_(file, id_):
+def enable(file, id_):
     link_name = f'{id_}.jar'
     if exists(link_name) or islink(link_name):
         os.remove(link_name)
     os.symlink(join(mods_available, file), join(mods_enabled, link_name))
-    echo(f'Enable {link_name} <- {file}')
+    echo(f'[Enable]: {link_name} <- {file}')
 
 
-@cli.command()
+def enable_auto(mod_id, map_data=None):
+    if map_data is None:
+        map_data = list_()
+    versions = map_data[mod_id]
+    rules = read_rules()
+    blocked = dict_safe_get(rules, mod_id, 'block')
+    i = len(versions) - 1
+    while True:
+        mod_file = versions[i]
+        if mod_file not in blocked:
+            if len(blocked) > 0:
+                echo(f'[Skip blocked]: {versions[i + 1:]}')
+            break
+        i -= 1
+        if i < 0:
+            echo(f'No available mod of {mod_id} except block list{blocked}')
+            return
+
+    enable(mod_file, mod_id)
+
+
+@cli.command('enable')
 @cl.argument('mod_id', metavar='name')
 @cl.argument('index', required=False, type=int, default=-1)
 @cl.option('--auto', '-a', is_flag=True)
-def enable(mod_id, index, auto):
-    # if exists(name):
-    #     log.info(f'SkipExisted:{name}')
+def enable_(mod_id, index, auto):
     map_data = list_()
     versions = map_data[mod_id]
     if len(versions) != 1:
         if index != -1:
             mod_file = versions[index]
         elif auto:
-            rules = read_rules()
-            blocked = dict_safe_get(rules, mod_id, 'block')
-            i = len(versions) - 1
-            while True:
-                mod_file = versions[i]
-                if mod_file not in blocked:
-                    if len(blocked) > 0:
-                        echo(f'Skip blocked {versions[i + 1:]}')
-                    break
-                i -= 1
-                if i < 0:
-                    echo(f'No available mod of {mod_id} except block list{blocked}')
-                    return
+            enable_auto(mod_id, map_data)
+            return
         else:
-            print('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
+            echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
             return
     else:
         mod_file = versions[0]
-
-    enable_(mod_file, mod_id)
+    enable(mod_file, mod_id)
 
 
 @cli.command()
@@ -317,7 +311,7 @@ def versions_(name):
 def apply_(rules_with_mode):
     rules_data = read_rules()
     ruleset = []
-    print(' '.join(rules_with_mode))
+    echo(' '.join(rules_with_mode))
     for rule_name in rules_with_mode:
         if rule_name == '_all' or rule_name == '+all':
             continue
@@ -325,13 +319,14 @@ def apply_(rules_with_mode):
             'mode': RuleMode.EXCEPT if rule_name[0] == '_' else RuleMode.APPEND,
             'rule': rules_data['ruleset'][rule_name[1:]]
         })
-    print(ruleset)
+    log.debug(ruleset)
     apply(ruleset, '_all' not in rules_with_mode)
 
 
 def apply(ruleset, pre_add_all=True):
     map_data = list_()
     ids = [x for x in map_data.keys()] if pre_add_all else []
+    clean(os.curdir)
     for rule in ruleset:
         mode = rule['mode']
         rules = rule['rule']
@@ -343,7 +338,9 @@ def apply(ruleset, pre_add_all=True):
             for x in rules:
                 if x in ids:
                     ids.remove(x)
-    print(ids)
+    for x in ids:
+        enable_auto(x, map_data)
+    echo(ids)
 
 
 # --add -r client --except -r server
@@ -353,11 +350,13 @@ def parse_rule_statement(statements):
 
 
 class OrderedArgsAction(argparse.Action):
+    NAME = 'ordered_args'
+
     def __call__(self, parser, namespace, values, option_string=None):
-        arg_list = getattr(namespace, 'ordered_args', None)
+        arg_list = getattr(namespace, self.NAME, None)
         if arg_list is None:
             arg_list = []
-            setattr(namespace, 'ordered_args', arg_list)
+            setattr(namespace, self.NAME, arg_list)
         arg_list.append({'option': option_string, 'value': values})
 
 
@@ -373,7 +372,7 @@ def gen_rule(args):
     parsar1.add_argument('-c', '--current', nargs='?', action=OrderedArgsAction, const=str)
     parsar1.add_argument('-n', '--name')
     args1 = parsar1.parse_args(args[0])
-    print(args1)
+    log.debug(args1)
     for args_ in args1.ordered_args:
         match args_['option']:
             case '-a' | '--append':
@@ -391,31 +390,59 @@ def gen_rule(args):
                     mods.extend([x.rstrip('.jar') for x in filenames if x.endswith('.jar')])
                     break
                 result.extend(y for y in mods if y not in result)
+    if args1.name:
+        d = dict_safe_get(rule_data, 'ruleset', args1.name)
+        d.extend(result)
+        write_rules(rule_data)
 
     echo(result)
 
 
-def save(rule_name):
+def save(rule_name, preview=False):
     mods = []
     for root, dirs, filenames in os.walk('.'):
         mods.extend([x.rstrip('.jar') for x in filenames if x.endswith('.jar')])
         break
+    if preview:
+        echo('\n'.join(mods))
+        return mods
     rules = read_rules()
     mod_rule = dict_safe_get(rules, 'ruleset', rule_name)
     mod_rule.clear()
     mod_rule.extend(mods)
     write_rules(rules)
-    print(f'{rule_name}:{mods}')
+    echo(f'{rule_name}:{mods}')
+    return mods
 
 
 @cli.command('save')
 @cl.argument('rule_name')
-def save_(rule_name):
-    save(rule_name)
+@cl.option('-l', '--list-only', is_flag=True, required=False)
+def save_(rule_name, list_only):
+    save(rule_name, preview=list_only)
 
 
-@cli.command()
-@cl.option('-p', '--path', default='.')
+def clean(path):
+    last_loc = os.curdir
+    os.chdir(path)
+    files = []
+    for root, dirs, filenames in os.walk(path):
+        files.extend(filenames)
+        break
+    for x in files:
+        if islink(x):
+            os.unlink(x)
+            echo(f'[Unlink]: {x}')
+        else:
+            log.warning(f'file {x} not symbolic link')
+    os.chdir(last_loc)
+
+
+@cli.command('clean')
+def clean_():
+    clean(os.curdir)
+
+
 def archive(path):
     last_loc = os.curdir
     os.chdir(path)
@@ -426,13 +453,19 @@ def archive(path):
     for file in files:
         if islink(file):
             if file.endswith('.old') or file.endswith('.disabled'):
-                echo(f'[-] ({file})')
+                echo(f'[-]: ({file})')
                 os.unlink(file)
             continue
         if file.endswith('.jar') or file.endswith('.old') or file.endswith('.disabled'):
             echo(f'>>{file}')
             shutil.move(file, join(mods_available, file.rstrip('.old').rstrip('.disabled')))
     os.chdir(last_loc)
+
+
+@cli.command('archive')
+@cl.option('-p', '--path', default='.')
+def archive_(path):
+    archive(path)
 
 
 def select(pattern):
@@ -443,11 +476,12 @@ def select(pattern):
 @cli.command('select')
 @cl.argument('pattern')
 def select_(pattern):
-    print('\n'.join(select(pattern)))
+    echo('\n'.join(select(pattern)))
 
 
 if __name__ == '__main__':
     log.getLogger()
+    log.basicConfig(format='[%(asctime)s %(levelname)s] [%(funcName)s]: %(message)s', datefmt='%H:%M:%S')
 
     pre_parser = argparse.ArgumentParser()
     pre_parser.add_argument('command', default=None)
