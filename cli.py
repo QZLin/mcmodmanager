@@ -9,9 +9,24 @@ from ModManager import *
 @click.option('--debug', '-d', is_flag=True, default=False)
 @click.pass_context
 def cli(ctx, debug):
-    if debug:
-        log.getLogger().setLevel(log.DEBUG)
-        log.debug(ctx)
+    if not debug:
+        return
+    log.getLogger().setLevel(log.DEBUG)
+    log.debug(ctx)
+    # input('Attach debugger to process and press enter...')
+    # import sys, threading, importlib.abc
+    #
+    # class NotificationFinder(importlib.abc.MetaPathFinder):
+    #     def find_spec(self, fullname, _path, _target=None):
+    #         if 'pydevd' in fullname:
+    #             with t:
+    #                 t.notify()
+    #
+    # t = threading.Condition()
+    # sys.meta_path.insert(0, NotificationFinder())
+
+    # with t:
+    #     t.wait()
 
 
 @cli.command('init')
@@ -27,35 +42,24 @@ def rebuild_():
 
 @cli.command('enable')
 @click.argument('mod_id', metavar='name')
-@click.argument('index', required=False, type=int, default=-1)
+@click.argument('index', required=False, type=int, default=None)
 @click.option('--auto', '-a', is_flag=True)
 def enable_(mod_id, index, auto):
-    map_data = list_mods()
-    versions = map_data[mod_id]
-    str_version.sort_versions(versions)
+    versions = get_version(mod_id, index, auto)
+
     if len(versions) != 1:
-        if index != -1:
-            mod_file = versions[index]
-        elif auto:
-            enable_auto(mod_id, map_data)
-            return
-        else:
-            echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
-            return
+        echo('Select a version')
+        echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
+        return
     else:
-        mod_file = versions[0]
-    enable(mod_file, mod_id)
+        enable(versions[0], mod_id)
 
 
 @cli.command('disable')
 @click.argument('mod_id')
 def disable_(mod_id):
     file = f'{mod_id}.jar' if not mod_id.endswith('.jar') else mod_id
-    if exists(file) or islink(file):
-        os.remove(file)
-        echo(f'[Unlink]: {file}')
-    else:
-        log.warning(f'NotFound {file}')
+    disable(file)
 
 
 @cli.command()
@@ -108,30 +112,42 @@ def mark(id_, pattern, server, client, flag):
     write_rules(rules)
 
 
-@cli.command('ls')
-@click.option('--tree', '-t', is_flag=True)
+@cli.command('list')
+@click.option('format_', '-f', metavar='format', type=click.Choice(('tree', 'freeze')))
+# @click.option('--tree', '-t', is_flag=True)
 @click.option('--min', '-m', 'min_info', is_flag=True)
-def list_mods_(tree, min_info):
+def list_mods_(format_, min_info):
     map_data = list_mods()
 
-    if tree:
+    if format_ == 'tree':
         for k, v in map_data.items():
             if min_info and len(v) <= 1:
                 continue
             print(k)
             for x in v:
                 print(f'\t{x}')
+    elif format_ == 'freeze':
+        pass
     else:
         echo('\n'.join(map_data.keys()))
         return map_data
 
 
+@cli.command()
+@click.option('format_', '-f', metavar='format', type=click.Choice(('tree', 'freeze')))
+def ls(format_):
+    mods = ls_mods()
+    if format_ == 'freeze':
+        print('\n'.join(mods))
+    else:
+        print('\n'.join(mods))
+
+
 @cli.command('versions')
 @click.argument('name')
 def versions_(name):
-    data = list_mods()
-    str_version.sort_versions(data[name])
-    echo(data[name])
+    versions = get_version(name)
+    echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
 
 
 @cli.command('apply')
@@ -140,6 +156,11 @@ def versions_(name):
 # @cl.option('-x', '--rules-except', multiple=True)
 # @cl.option('-n', '--pre-add-all', is_flag=True)
 def apply_(rules_with_mode):
+    """
+    If version select property not specify, latest version will selected
+    :param rules_with_mode:
+    :return:
+    """
     rules_data = read_rules()
     ruleset = []
     echo(' '.join(rules_with_mode))
@@ -178,6 +199,7 @@ def gen_rule(args):
     rule_data = read_rules()
 
     parsar1 = argparse.ArgumentParser()
+
     parsar1.add_argument('-a', '--append', nargs='?', action=OrderedArgsAction, const=str)
     parsar1.add_argument('-e', '--exclude', nargs='?', action=OrderedArgsAction, const=str)
     parsar1.add_argument('-c', '--current', nargs='?', action=OrderedArgsAction, const=str)
@@ -240,12 +262,21 @@ def clean_():
 
 @cli.command('archive')
 @click.option('-p', '--path', default='.')
-def archive_(path):
+@click.option('-u', '--upgrade', is_flag=True)
+def archive_(path, upgrade=True):
     a, b = archive(path)
     echo('[UNLINK]:')
     echo('\n'.join(a))
     echo('[ARCHIVE]:')
     echo('\n'.join(b))
+    if upgrade:
+        echo('[Upgrade]:')
+        mods = [x.removesuffix('.old').removesuffix('.disabled').removesuffix('.jar') for x in b]
+        gen_metadata(mods_available, dir_metadata)
+        read_metadata(dir_metadata, rebuild=True)
+        map_data = list_mods()
+        for x in mods:
+            enable_auto(x, map_data)
 
 
 @cli.command('select')
@@ -264,7 +295,7 @@ if __name__ == '__main__':
     pre_args = pre_parser.parse_known_args()
     if pre_args[0].debug:
         log.getLogger().setLevel(log.DEBUG)
-    log.debug('Pre-Parser end')
+    log.debug('Pre-Parsing finished')
     if pre_args[0].command == 'gen-rule':
         gen_rule(pre_args[1:])
     else:
