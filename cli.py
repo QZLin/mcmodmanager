@@ -1,8 +1,13 @@
 import argparse
+import logging as log
+import os
 
 import click
+from click import echo
 
-from ModManager import *
+import ModManager as Mn
+import datautils
+import str_version
 
 
 @click.group()
@@ -24,20 +29,20 @@ def cli(ctx, debug):
     #
     # t = threading.Condition()
     # sys.meta_path.insert(0, NotificationFinder())
-
+    #
     # with t:
     #     t.wait()
 
 
-@cli.command('init')
-def init_():
-    init_dir()
+@cli.command()
+def init():
+    Mn.init_dir()
 
 
-@cli.command('rebuild')
-def rebuild_():
-    gen_metadata(mods_available, dir_metadata)
-    read_metadata(dir_metadata, rebuild=True)
+@cli.command()
+def rebuild():
+    Mn.gen_metadata()
+    Mn.read_metadata(rebuild=True)
 
 
 @cli.command('enable')
@@ -45,27 +50,28 @@ def rebuild_():
 @click.argument('index', required=False, type=int, default=None)
 @click.option('--auto', '-a', is_flag=True)
 def enable_(mod_id, index, auto):
-    versions = get_version(mod_id, index, auto)
+    versions = Mn.get_version(mod_id, index, auto)
 
     if len(versions) != 1:
         echo('Select a version')
         echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
         return
     else:
-        enable(versions[0], mod_id)
+        Mn.enable(versions[0], mod_id)
 
 
 @cli.command('disable')
 @click.argument('mod_id')
 def disable_(mod_id):
     file = f'{mod_id}.jar' if not mod_id.endswith('.jar') else mod_id
-    disable(file)
+    echo(f'[disable] {file}')
+    Mn.disable(file)
 
 
 @cli.command()
 @click.argument('file')
 def block(file):
-    map_data = list_mods()
+    map_data = Mn.list_mods()
     name = None
     for k, v in map_data.items():
         if file in v:
@@ -75,12 +81,12 @@ def block(file):
         log.warning(f'Not Found {file}')
         return
     echo(f'[Block] {file} of "{name}"')
-    data = read_rules()
+    data = Mn.read_rules()
 
-    obj = nerd_dict_get(data, name, 'block')
+    obj = Mn.nerd_dict_get(data, name, 'block')
     if file not in obj:
         obj.append(file)
-    write_rules(data)
+    Mn.write_rules(data)
 
 
 @cli.command()
@@ -94,7 +100,7 @@ def mark(id_, pattern, server, client, flag):
     if id_:
         ids.append(id_)
     if pattern:
-        ids.extend(select(pattern))
+        ids.extend(Mn.select(pattern))
 
     flags = []
     if server:
@@ -105,11 +111,11 @@ def mark(id_, pattern, server, client, flag):
         flags.extend(flag)
     echo('Flags:' + ' '.join(flags))
     echo('\t' + '\n\t'.join(ids))
-    rules = read_rules()
+    rules = Mn.read_rules()
     for fl in flags:
-        obj = nerd_dict_get(rules, 'ruleset', fl, obj=[])
+        obj = Mn.nerd_dict_get(rules, 'ruleset', fl, obj=[])
         obj.extend([x for x in ids if x not in obj])
-    write_rules(rules)
+    Mn.write_rules(rules)
 
 
 @cli.command('list')
@@ -117,9 +123,11 @@ def mark(id_, pattern, server, client, flag):
 # @click.option('--tree', '-t', is_flag=True)
 @click.option('--min', '-m', 'min_info', is_flag=True)
 def list_mods_(format_, min_info):
-    map_data = list_mods()
+    map_data = Mn.list_mods()
 
     if format_ == 'tree':
+        for k in map_data.keys():
+            str_version.sort_versions(map_data[k])
         for k, v in map_data.items():
             if min_info and len(v) <= 1:
                 continue
@@ -134,11 +142,14 @@ def list_mods_(format_, min_info):
 
 
 @cli.command()
-@click.option('format_', '-f', metavar='format', type=click.Choice(('tree', 'freeze')))
+@click.option('format_', '-f', metavar='format', type=click.Choice(('tree', 'freeze', 'id')))
 def ls(format_):
-    mods = ls_mods()
+    mods = Mn.ls_mods()
     if format_ == 'freeze':
-        print('\n'.join(mods))
+        mapping = datautils.Data(Mn.file_mapping)
+        print('\n'.join(f'{x}=={mapping[x]}' for x in mods))
+    elif format_ == 'id':
+        print('\n'.join((x.removesuffix('.jar') for x in mods)))
     else:
         print('\n'.join(mods))
 
@@ -146,7 +157,7 @@ def ls(format_):
 @cli.command('versions')
 @click.argument('name')
 def versions_(name):
-    versions = get_version(name)
+    versions = Mn.get_version(name)
     echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
 
 
@@ -161,18 +172,18 @@ def apply_(rules_with_mode):
     :param rules_with_mode:
     :return:
     """
-    rules_data = read_rules()
+    rules_data = Mn.read_rules()
     ruleset = []
     echo(' '.join(rules_with_mode))
     for rule_name in rules_with_mode:
         if rule_name == '_all' or rule_name == '+all':
             continue
         ruleset.append({
-            'mode': RuleMode.EXCEPT if rule_name[0] == '_' else RuleMode.APPEND,
+            'mode': Mn.RuleMode.EXCEPT if rule_name[0] == '_' else Mn.RuleMode.APPEND,
             'rule': rules_data['ruleset'][rule_name[1:]]
         })
     log.debug(ruleset)
-    echo(apply(ruleset, '_all' not in rules_with_mode))
+    echo(Mn.apply(ruleset, '_all' not in rules_with_mode))
 
 
 # --add -r client --except -r server
@@ -193,10 +204,10 @@ class OrderedArgsAction(argparse.Action):
 
 
 def gen_rule(args):
-    map_data = list_mods()
+    map_data = Mn.list_mods()
     result = []
     result.extend(map_data.keys())
-    rule_data = read_rules()
+    rule_data = Mn.read_rules()
 
     parsar1 = argparse.ArgumentParser()
 
@@ -224,9 +235,9 @@ def gen_rule(args):
                     break
                 result.extend(y for y in mods if y not in result)
     if args1.name:
-        obj = nerd_dict_get(rule_data, 'ruleset', args1.name)
+        obj = Mn.nerd_dict_get(rule_data, 'ruleset', args1.name)
         obj.extend(result)
-        write_rules(rule_data)
+        Mn.write_rules(rule_data)
 
     echo(result)
 
@@ -239,11 +250,11 @@ def save(rule_name, preview=False):
     if preview:
         echo('\n'.join(mods))
         return mods
-    rules = read_rules()
-    mod_rule = nerd_dict_get(rules, 'ruleset', rule_name)
+    rules = Mn.read_rules()
+    mod_rule = Mn.nerd_dict_get(rules, 'ruleset', rule_name)
     mod_rule.clear()
     mod_rule.extend(mods)
-    write_rules(rules)
+    Mn.write_rules(rules)
     echo(f'{rule_name}:{mods}')
     return mods
 
@@ -257,32 +268,31 @@ def save_(rule_name, list_only):
 
 @cli.command('clean')
 def clean_():
-    clean(os.curdir)
+    Mn.clean(os.curdir)
 
 
 @cli.command('archive')
 @click.option('-p', '--path', default='.')
 @click.option('-u', '--upgrade', is_flag=True)
 def archive_(path, upgrade=True):
-    a, b = archive(path)
+    unlinked, archived = Mn.archive(path)
     echo('[UNLINK]:')
-    echo('\n'.join(a))
+    echo('\n'.join(unlinked))
     echo('[ARCHIVE]:')
-    echo('\n'.join(b))
+    echo('\n'.join(archived))
     if upgrade:
         echo('[Upgrade]:')
-        mods = [x.removesuffix('.old').removesuffix('.disabled').removesuffix('.jar') for x in b]
-        gen_metadata(mods_available, dir_metadata)
-        read_metadata(dir_metadata, rebuild=True)
-        map_data = list_mods()
+        mods = [x.removesuffix('.old').removesuffix('.jar') for x in archived if x.endswith('.old')]
+        mapping = datautils.Data(Mn.file_mapping, delay_write=True)
         for x in mods:
-            enable_auto(x, map_data)
+            Mn.enable_auto(x, mapping=mapping)
+        mapping.write()
 
 
 @cli.command('select')
 @click.argument('pattern')
 def select_(pattern):
-    echo('\n'.join(select(pattern)))
+    echo('\n'.join(Mn.select(pattern)))
 
 
 if __name__ == '__main__':

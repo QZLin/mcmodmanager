@@ -1,6 +1,12 @@
 import re
 from operator import itemgetter
 
+'''
+Compair version tags like:
+1.7.10
+1.23b.34
+'''
+
 
 def version2nums(name):
     r = re.findall('\\d+', name)

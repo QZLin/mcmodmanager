@@ -7,16 +7,20 @@ import shutil
 import zipfile
 from enum import Enum
 from os.path import join, exists, islink
+from typing import *
 
-from click import echo
 import yaml
-
-import str_version
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
+from click import echo
+
+import datautils as du
+import str_version
+
+j = join
 
 root_dir = os.path.abspath(os.curdir)
 mods_available = join(root_dir, 'mods-available')
@@ -28,9 +32,13 @@ dir_runvar = join(root_dir, 'var')
 dir_rules_d = join(dir_conf, 'rules.d')
 dir_mixin_d = join(dir_conf, 'mixin.d')
 
-init_required_dirs = [mods_available, mods_enabled,
+#
+file_metadata_cache = j(dir_metadata, 'metadata.json')
+file_mapping = j(dir_conf, 'maps.json')
+
+init_required_dirs = (mods_available, mods_enabled,
                       dir_conf, dir_metadata, dir_runvar,
-                      dir_rules_d, dir_mixin_d]
+                      dir_rules_d, dir_mixin_d)
 
 
 class ConfigType:
@@ -103,10 +111,10 @@ def pop_d():
     os.chdir(path)
 
 
-def nerd_dict_get(dictionary, *keys, obj=None):
+def nerd_dict_get(dict_: dict, *keys, obj=None):
     if obj is None:
         obj = []
-    next_obj = dictionary
+    next_obj = dict_
     for i, key in enumerate(keys):
         if key in next_obj.keys():
             next_obj = next_obj[key]
@@ -120,17 +128,30 @@ def nerd_dict_get(dictionary, *keys, obj=None):
     return next_obj
 
 
+def nerd_get(obj: dict, *pairs: Tuple[Any, Any]):
+    next_obj = obj
+    for pair in pairs:
+        key, value = pair
+        if key in obj.keys():
+            next_obj = obj[key]
+        else:
+            next_obj[key] = value
+    return next_obj
+
+
 def get_mixin():
     return get_cfgs(join(dir_conf, 'mixin'))
 
 
-def gen_metadata(library_dir, output_dir):
+def gen_metadata(library_dir=None, output_dir=None):
+    if library_dir is None:
+        library_dir = mods_available
+    if output_dir is None:
+        output_dir = dir_metadata
     # clean cached metadata
-    for root, dirs, filenames in os.walk(dir_metadata):
-        for file in filenames:
-            if file.endswith('.json'):
-                os.remove(join(dir_metadata, file))
-            break
+    cached_files = (x for x in next(os.walk(dir_metadata))[2] if x.endswith('.json'))
+    for x in cached_files:
+        os.remove(j(dir_metadata, x))
 
     files = next(os.walk(library_dir))[2]
     mixin_data = get_mixin()
@@ -161,17 +182,20 @@ def gen_metadata(library_dir, output_dir):
     return jars
 
 
-def read_metadata(dir_, cache=join(dir_conf, 'metadata.json'), rebuild=False):
+def read_metadata(dir_=dir_metadata, cache=None, rebuild=False):
+    if cache is None:
+        cache = file_metadata_cache
     if (not rebuild) and exists(cache):
         with open(cache) as f:
             return json.load(f)
+
     metadata = {}
-    files = []
-    for root, dirs, filenames in os.walk(dir_):
-        files.extend([x for x in filenames if x.lower().endswith('.json')])
-        break
+    files = (x for x in next(os.walk(dir_))[2] if x.endswith('.json'))
+    # for root, dirs, filenames in os.walk(dir_):
+    #     files.extend([x for x in filenames if x.lower().endswith('.json')])
+    #     break
     for x in files:
-        with open(join(dir_, x)) as f:
+        with open(join(dir_, x), encoding='utf-8') as f:
             content = json.load(f)
             metadata[x] = content
     with open(cache, 'w') as f:
@@ -199,16 +223,16 @@ def write_rules(rule: dict, rule_file=join(dir_conf, 'rules.json')):
 
 
 def get_lib_info(metadata: dict):
-    mod_map = {}
+    versions_data = {}
     for filename, data in metadata.items():
         name = filename.removesuffix('.json')
         if 'id' not in data.keys():
-            log.error(f'id not found in {data.keys()}')
+            log.warning(f'id not found in {data.keys()}')
             continue
-        if data['id'] not in mod_map.keys():
-            mod_map[data['id']] = []
-        mod_map[data['id']].append(name)
-    return mod_map
+        if data['id'] not in versions_data.keys():
+            versions_data[data['id']] = []
+        versions_data[data['id']].append(name)
+    return versions_data
 
 
 def init_dir():
@@ -218,31 +242,43 @@ def init_dir():
         elif os.path.isdir(dir_):
             log.debug(f'skip existed dir {dir_}')
         else:
-            log.warning(f'file {dir_} existed, can\'t create dir')
+            log.error(f'file {dir_} existed, can\'t create dir')
 
 
-def enable(file, id_):
+def get_version(mod_id, index=None, auto=False):
+    versions_data = list_mods()
+    if mod_id not in versions_data.keys():
+        raise RuntimeError(f'mod `{mod_id}` not found')
+    versions = versions_data[mod_id]
+    str_version.sort_versions(versions)
+    if index is not None and index < len(versions):
+        return (versions[index],)
+    elif auto:
+        return (versions[0],)
+    return versions
+
+
+def enable(file, id_, mapping: du.Data = None):
+    if mapping is None:
+        mapping = du.Data(file_mapping)
     link_name = f'{id_}.jar'
     if exists(link_name) or islink(link_name):
         os.remove(link_name)
         log.info(f'Existed {link_name} Removed')
     os.symlink(join(mods_available, file), join(mods_enabled, link_name))
-    echo(f'[Enable]: {link_name} <- {file}')
+    mapping[link_name] = file
+    echo(f'[Enable]: {link_name} -> {file}')
 
 
-def enable_auto(mod_id, map_data=None):
-    if map_data is None:
-        map_data = list_mods()
-    versions = map_data[mod_id]
+def enable_auto(mod_id, versions_data=None, mapping: du.Data = None):
+    if versions_data is None:
+        versions_data = list_mods()
+    # if mod_id not in versions_data.keys():
+    #     raise RuntimeError(f'{mod_id} not found')
+    versions = get_version(mod_id)
     rules = read_rules()
-    blocked = nerd_dict_get(rules, mod_id, 'block')
+    blocked = nerd_get(rules, ('mods', {}), (mod_id, {}), ('block', []))
 
-    # for i in range(len(versions) - 1, -1, -1):
-    #     mod_file = versions[i]
-    #     if mod_file not in blocked:
-    #         if len(blocked) > 0:
-    #             log.info(f'[Skip blocked]: {versions[i + 1:]}')
-    #         break
     for x in blocked:
         if x not in versions:
             continue
@@ -254,18 +290,37 @@ def enable_auto(mod_id, map_data=None):
         log.error(f'No available mod of {mod_id} except block list {blocked}')
         return
 
-    enable(mod_file, mod_id)
+    enable(mod_file, mod_id, mapping)
+
+
+def disable(file):
+    if exists(file) or islink(file):
+        os.remove(file)
+        log.info(f'[Unlink]: {file}')
+    else:
+        log.warning(f'NotFound {file}')
 
 
 def list_mods():
     meta = read_metadata(dir_metadata)
-    map_data = get_lib_info(meta)
-    return map_data
+    versions_data = get_lib_info(meta)
+    return versions_data
+
+
+def ls_mods(path=None):
+    if path is None:
+        path = os.curdir
+    jars = [x for x in next(os.walk(path))[2] if x.endswith('.jar')]
+    return jars
+
+
+def readlink(path):
+    os.path.relpath(path)
 
 
 def apply(ruleset, pre_add_all=True):
-    map_data = list_mods()
-    ids = [x for x in map_data.keys()] if pre_add_all else []
+    versions_data = list_mods()
+    ids = [x for x in versions_data.keys()] if pre_add_all else []
     clean(os.curdir)
     for rule in ruleset:
         mode = rule['mode']
@@ -278,48 +333,84 @@ def apply(ruleset, pre_add_all=True):
             for x in rules:
                 if x in ids:
                     ids.remove(x)
+    mapping = du.Data('maps.json', True)
     for x in ids:
-        enable_auto(x, map_data)
+        enable_auto(x, versions_data, mapping)
+    mapping.write()
     return ids
 
 
 def clean(path):
-    last_loc = os.curdir
-    os.chdir(path)
+    push_d(path)
     files = []
     for root, dirs, filenames in os.walk(path):
         files.extend(filenames)
         break
+    mapping = get_map()
     for x in files:
         if islink(x):
             os.unlink(x)
+            mapping.pop(x)
             echo(f'[Unlink]: {x}')
         else:
             log.warning(f'file {x} not symbolic link')
-    os.chdir(last_loc)
+    mapping.write()
+    pop_d()
 
 
 def select(pattern):
-    map_data = list_mods()
-    return [x for x in map_data.keys() if re.match(pattern, x)]
+    versions_data = list_mods()
+    return [x for x in versions_data.keys() if re.match(pattern, x)]
 
 
-def archive(path):
-    files = next(os.walk(path))[2]
+def is_disabled(name):
+    return re.match(r'(.*\.jar)(\.(old|disabled))$', name)
+    # example.jar.disabled
+    # ('example.jar', '.disabled', 'disabled')
+
+
+def archive(path: str) -> Tuple[List[str], List[str]]:
+    files: List[str] = next(os.walk(path))[2]  # ls -File
 
     push_d(path)
     unlink_list = []
     archive_list = []
 
+    mapping = get_map()
     for file_name in files:
+        # old link
         if islink(file_name):
-            if file_name.endswith('.old') or file_name.endswith('.disabled'):
+            if is_disabled(file_name):
                 unlink_list.append(file_name)
                 os.unlink(file_name)
-        elif (i := file_name.rfind('.')) != -1 and file_name[i:] in ['.jar', '.old', '.disabled']:
+                mapping.pop(file_name)
+                log.debug(f'[unlink] {file_name}')
+        # unknown file
+        elif r := is_disabled(file_name):
+            restored_name = file_name.removesuffix(r.groups()[1])
+            if not os.path.exists(target := j(mods_available, restored_name)):
+                archive_list.append(file_name)
+                shutil.move(file_name, target)
+                mapping.pop(file_name)
+            else:
+                log.error(f'Conflict Name {file_name} -> {restored_name}')
+        # new file
+        elif re.match(r'.*\.jar', file_name):
             archive_list.append(file_name)
-            shutil.move(file_name, join(mods_available, file_name.removesuffix('.old').removesuffix('.disabled')))
+            shutil.move(file_name, join(mods_available, file_name))
+            mapping.pop(file_name)
+            log.info(f'[move] {file_name} to [mods_available]')
+    mapping.write()
+
     gen_metadata(mods_available, dir_metadata)
     read_metadata(dir_metadata, rebuild=True)
     pop_d()
     return unlink_list, archive_list
+
+
+def get_map():
+    return du.Data(file_mapping, delay_write=True)
+
+
+def prune():
+    pass
