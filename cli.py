@@ -41,15 +41,15 @@ def init():
 
 @cli.command()
 def rebuild():
-    Mn.gen_metadata()
-    Mn.read_metadata(rebuild=True)
+    Mn.extract_metadata()
+    Mn.parse_metadata(rebuild=True)
 
 
-@cli.command('enable')
+@cli.command()
 @click.argument('mod_id', metavar='name')
 @click.argument('index', required=False, type=int, default=None)
 @click.option('--auto', '-a', is_flag=True)
-def enable_(mod_id, index, auto):
+def enable(mod_id, index, auto):
     versions = Mn.get_version(mod_id, index, auto)
 
     if len(versions) != 1:
@@ -60,9 +60,9 @@ def enable_(mod_id, index, auto):
         Mn.enable(versions[0], mod_id)
 
 
-@cli.command('disable')
+@cli.command()
 @click.argument('mod_id')
-def disable_(mod_id):
+def disable(mod_id):
     file = f'{mod_id}.jar' if not mod_id.endswith('.jar') else mod_id
     echo(f'[disable] {file}')
     Mn.disable(file)
@@ -161,12 +161,12 @@ def versions_(name):
     echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
 
 
-@cli.command('apply')
+@cli.command()
 @click.argument('rules_with_mode', metavar='rules', nargs=-1)
 # @cl.option('-a', '--rules-append', multiple=True)
 # @cl.option('-x', '--rules-except', multiple=True)
 # @cl.option('-n', '--pre-add-all', is_flag=True)
-def apply_(rules_with_mode):
+def apply(rules_with_mode):
     """
     If version select property not specify, latest version will selected
     :param rules_with_mode:
@@ -229,10 +229,7 @@ def gen_rule(args):
                         continue
                     result.remove(y)
             case '-c' | '--current':
-                mods = []
-                for root, dirs, filenames in os.walk('.'):
-                    mods.extend([x.removesuffix('.jar') for x in filenames if x.endswith('.jar')])
-                    break
+                mods = (x for x in next(os.walk('.'))[2] if x.endswith('.jar'))
                 result.extend(y for y in mods if y not in result)
     if args1.name:
         obj = Mn.nerd_dict_get(rule_data, 'ruleset', args1.name)
@@ -243,15 +240,12 @@ def gen_rule(args):
 
 
 def save(rule_name, preview=False):
-    mods = []
-    for root, dirs, filenames in os.walk('.'):
-        mods.extend([x.removesuffix('.jar') for x in filenames if x.endswith('.jar')])
-        break
+    mods = [x.removesuffix('.jar') for x in next(os.walk('.'))[2] if x.endswith('.jar')]
     if preview:
         echo('\n'.join(mods))
         return mods
     rules = Mn.read_rules()
-    mod_rule = Mn.nerd_dict_get(rules, 'ruleset', rule_name)
+    mod_rule = Mn.nerd_get(rules, ('ruleset', {}), (rule_name, []))
     mod_rule.clear()
     mod_rule.extend(mods)
     Mn.write_rules(rules)
@@ -266,15 +260,15 @@ def save_(rule_name, list_only):
     save(rule_name, preview=list_only)
 
 
-@cli.command('clean')
-def clean_():
+@cli.command()
+def clean():
     Mn.clean(os.curdir)
 
 
-@cli.command('archive')
+@cli.command()
 @click.option('-p', '--path', default='.')
 @click.option('-u', '--upgrade', is_flag=True)
-def archive_(path, upgrade=True):
+def archive(path, upgrade=True):
     unlinked, archived = Mn.archive(path)
     echo('[UNLINK]:')
     echo('\n'.join(unlinked))
@@ -289,9 +283,9 @@ def archive_(path, upgrade=True):
         mapping.write()
 
 
-@cli.command('select')
+@cli.command()
 @click.argument('pattern')
-def select_(pattern):
+def select(pattern):
     echo('\n'.join(Mn.select(pattern)))
 
 
