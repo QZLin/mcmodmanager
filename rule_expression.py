@@ -16,8 +16,10 @@ class Token:
 
 
 def to_ast(text: str) -> List[Token]:
-    words = (Token(x.group(), x.span(), 'name') for x in re.finditer(token_word, text))
-    symbols = (Token(x.group(), x.span(), 'operator') for x in re.finditer(token_symbol, text))
+    words = (Token(x.group(), x.span(), 'name')
+             for x in re.finditer(token_word, text))
+    symbols = (Token(x.group(), x.span(), 'operator')
+               for x in re.finditer(token_symbol, text))
     tokens = []
     tokens.extend(words)
     tokens.extend(symbols)
@@ -43,6 +45,16 @@ def to_ast(text: str) -> List[Token]:
     return tokens
 
 
+def operate(symbol: Literal['+', '-'], data: List[Any], value: List[Any]) -> List[Any]:
+    if symbol == '+':
+        data.extend(x for x in value if x not in data)
+    elif symbol == '-':
+        data = [x for x in data if x not in value]
+    else:
+        raise NotImplementedError()
+    return data
+
+
 def execute(tokens: List[Token], rules: Dict[str, List[Any]]) -> List[Any]:
     result = []
     last_operator = None
@@ -50,8 +62,9 @@ def execute(tokens: List[Token], rules: Dict[str, List[Any]]) -> List[Any]:
     index = 0
     while True:
         token = tokens[index]
+        value = None
         if token.type == 'name':
-            pass
+            value = rules[token.content]
         if token.type == 'operator':
             if token.content == '(':
                 next_bracket = index
@@ -62,9 +75,16 @@ def execute(tokens: List[Token], rules: Dict[str, List[Any]]) -> List[Any]:
                     test_token = tokens[next_bracket]
                     if test_token.level == token.level and test_token.content == ')':
                         break
-                sub_ = index, next_bracket
-
-                pass
+                value = execute(tokens[index+1: next_bracket], rules)
+                index += next_bracket
+            elif token.content == ')':
+                raise RuntimeError()
+            else:
+                last_operator = token.content
+        if last_operator is not None and value is not None:
+            result = operate(last_operator, result, value)
+        elif value is not None:
+            result = value
         index += 1
         if index >= len(tokens):
             break
@@ -79,5 +99,7 @@ test = '((a+b-c)+$test-a1)+b_1'
 ast = to_ast(test)
 print(debug_tokens(ast))
 
-execute(ast, {'a': [1, 2, 3], 'a1': [4, 5, 6], 'b': [1, 3, 9], 'b_1': [2, 4, 6], 'c': [2],
-              '$test': [1, 2, 3, 4, 5, 6, 7, 8, 9]})
+rules1 = {'a': [1, 2, 3], 'a1': [4, 5, 6], 'b': [1, 3, 9], 'b_1': [2, 4, 6], 'c': [2],
+          '$test': [1, 2, 3, 4, 5, 6, 7, 8, 9]}
+r = execute(ast, rules1)
+print(r)
