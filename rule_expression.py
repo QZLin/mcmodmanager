@@ -75,7 +75,7 @@ def execute(tokens: List[Token], rules: Dict[str, List[Any]]) -> List[Any]:
                     test_token = tokens[next_bracket]
                     if test_token.level == token.level and test_token.content == ')':
                         break
-                value = execute(tokens[index+1: next_bracket], rules)
+                value = execute(tokens[index + 1: next_bracket], rules)
                 index += next_bracket
             elif token.content == ')':
                 raise RuntimeError()
@@ -93,13 +93,3 @@ def execute(tokens: List[Token], rules: Dict[str, List[Any]]) -> List[Any]:
 
 def debug_tokens(tokens: List[Token]) -> str:
     return '\n'.join(['    ' * x.level + x.content for x in tokens])
-
-
-test = '((a+b-c)+$test-a1)+b_1'
-ast = to_ast(test)
-print(debug_tokens(ast))
-
-rules1 = {'a': [1, 2, 3], 'a1': [4, 5, 6], 'b': [1, 3, 9], 'b_1': [2, 4, 6], 'c': [2],
-          '$test': [1, 2, 3, 4, 5, 6, 7, 8, 9]}
-r = execute(ast, rules1)
-print(r)

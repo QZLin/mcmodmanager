@@ -1,7 +1,7 @@
 import json
 import os.path
 
-from datautils import Data
+from DataUtil import Data
 
 a = Data('a.json', delay_write=True)
 print(a)

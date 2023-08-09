@@ -1,8 +1,8 @@
 import os
 import unittest
-import cli
+import Cli
 from ModManager import *
-from str_version import *
+from StrVersion import *
 
 if __name__ == '__main__':
     push_d(r'C:\vmo\minecraft\.minecraft-fabric\mods')
