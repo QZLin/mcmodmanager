@@ -1,5 +1,7 @@
 import json
 import os.path
+from dataclasses import dataclass
+from typing import Literal
 
 
 class Data(dict):
@@ -34,3 +36,18 @@ class Data(dict):
     def write(self):
         with open(self.file, 'w') as f:
             json.dump(self, f)
+
+
+@dataclass
+class ModFileInfo:
+    id: str
+    filename: str
+    directory: str
+    name: str = ""
+    version: str = ""
+    mcver: str = ""
+    launcher: Literal['fabric', 'quilt', 'forge'] = 'fabric'
+
+    @property
+    def fullpath(self):
+        return os.path.join(self.filename, self.directory)

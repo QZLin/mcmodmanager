@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 import typing as ty
-from os.path import join, exists
+from os.path import join, exists, basename
 
 import click
 from click import echo
@@ -69,15 +69,16 @@ def rebuild():
 @cli.command()
 @click.argument('file')
 def add(file):
-    file2 = join(Mn.env_dir.mods_available, file)
-    if exists(file2):
+    file_lib = join(Mn.env_dir.mods_available, basename(file))
+    in_lib = None
+    if exists(file_lib):
         in_lib = True
-    elif os.path.exists(file):
+    if exists(file):
         in_lib = False
-    else:
+    if in_lib is None:
         logging.error(f'file not exist: {file}')
         return
-    target = file2 if in_lib else file
+    target = file_lib if in_lib else file
     echo(file)
     if not in_lib:
         shutil.move(target, Mn.env_dir.mods_available)
@@ -96,6 +97,7 @@ def add(file):
             json.dump(cache, f, indent=2)
 
 
+@cli.command()
 def fix(path):
     pass
 
@@ -113,7 +115,9 @@ def enable(mod_id, index, auto):
         # echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
         return
     else:
-        Mn.enable(join(Mn.env_dir.mods_available, versions[0]), mod_id)
+        r = Mn.enable(versions[0], mod_id)
+        if r is not None:
+            echo(r)
 
 
 @cli.command()
@@ -374,7 +378,7 @@ def import_(path, read_only):
     mods = Mn.ls_mods(path)
     id_list = []
     for x in mods:
-        data = Mn.mod_metadata(join(path, x))
+        data, type_ = Mn.mod_metadata(join(path, x))
         if data is None:
             continue
         data = json.loads(data)
@@ -402,10 +406,10 @@ def archive(path, upgrade=True):
         mapping.write()
 
 
-@cli.command()
+@cli.command(name='select', aliases=['sl'])
 @click.argument('pattern')
 def select(pattern):
-    echo('\n'.join(Mn.select(pattern)))
+    format_print('mod_list', Mn.select(pattern))
 
 
 @cli.command('rules')
@@ -422,17 +426,17 @@ if __name__ == '__main__':
     pre_parser.add_argument('-d', '--debug', action='store_true')
     pre_parser.add_argument('--ide-debug', action='store_true')
     pre_args = pre_parser.parse_known_args()
-    virtual_args = None
+    dbg_args = None
     if pre_args[0].ide_debug:
         logging.getLogger().setLevel(logging.DEBUG)
-        virtual_args = input("input args:").split(' ')
+        dbg_args = input("input args:").split(' ')
     if pre_args[0].debug:
         logging.getLogger().setLevel(logging.DEBUG)
     logging.debug('Pre-Parsing finished')
     if pre_args[0].command == 'gen-rule':
         gen_rule(pre_args[1:])
     else:
-        if virtual_args is not None:
-            cli(args=virtual_args)
+        if dbg_args is not None:
+            cli(args=dbg_args)
         else:
             cli(obj={})

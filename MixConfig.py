@@ -25,7 +25,7 @@ def test_type(name):
 
 class Mixed:
     @staticmethod
-    def load(path, type_: CFGType = None):
+    def load(path, type_=None):
         if type_ is None:
             type_ = test_type(path)
         if type_ == CFGType.YAML:

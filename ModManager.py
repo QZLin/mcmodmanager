@@ -6,7 +6,7 @@ import re
 import shutil
 import zipfile
 from enum import Enum
-from os.path import join, exists, islink
+from os.path import join, exists, islink, relpath, abspath
 from typing import Dict, List, Any, Tuple
 
 import yaml
@@ -73,9 +73,6 @@ def nerd_get(obj: dict, *pairs: Tuple[Any, Any]):
             next_obj[key] = value
     return next_obj
 
-
-# def get_mixin():
-#     return get_cfgs(dir_conf, 'mixin')
 
 def _zip_has(zip_, path):
     return len([x for x in zip_.filelist if x.filename == path]) == 1
@@ -207,17 +204,29 @@ def get_version(mod_id, index=None, auto=False, versions_data=None) -> Tuple[str
     return versions
 
 
-def enable(file, id_, mapping: DataUtil.Data = None):
+def enable(filename, id_, mapping: DataUtil.Data = None):
     mapping = DataUtil.Data(env_file.mapping) if mapping is None else mapping
 
+    # target = join(env_dir.mods_available, filename)
+    target = None
+    if env_dir.use_relative:
+        try:
+            rel = relpath(start=env_dir.mods_enabled, path=env_dir.mods_available)
+            target = join(rel, filename)
+        except ValueError:
+            pass
+    if target is None:
+        target = abspath(join(env_dir.mods_available, filename))
+
     link_name = f'{id_}.jar'
-    link_dest = join(env_dir.mods_enabled, link_name)
-    if exists(link_dest) or islink(link_dest):
-        os.remove(link_dest)
+    link = join(env_dir.mods_enabled, link_name)
+    if exists(link) or islink(link):
+        os.remove(link)
         logging.info(f'Existed {link_name} Removed')
-    os.symlink(file, link_dest)
-    mapping[link_name] = file
-    logging.info(f'{link_name}#{link_dest} -> {file}')
+    os.symlink(target, link)
+    mapping[link_name] = target
+    logging.info(f'{link_name}#{link} -> {target}')
+    return link, target
 
 
 def enable_auto(mod_id, versions_data=None, mapping: DataUtil.Data = None):
@@ -235,7 +244,7 @@ def enable_auto(mod_id, versions_data=None, mapping: DataUtil.Data = None):
         logging.error(f'No available mod of {mod_id} except block list {blocked}')
         return
 
-    enable(versions[0], mod_id, mapping)
+    return enable(versions[0], mod_id, mapping)
 
 
 def disable(file):

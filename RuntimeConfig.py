@@ -5,14 +5,11 @@ from typing import Tuple
 
 
 class EnvDirs:
-    rules_d: str
-    mixin_d: str
     init_required_dirs = ('mods_available', 'mods_enabled',
                           'conf', 'rules_d', 'mixin_d',
                           'metadata', 'runvar')
 
     def __init__(self, root):
-
         self.mods_available = join(root, 'mods-available')
         self.mods_enabled = join(root, 'mods-enabled')
         self.metadata = join(root, 'metadata')
@@ -20,6 +17,7 @@ class EnvDirs:
         self.conf = join(root, 'conf')
 
         self.runvar = join(root, 'var')
+        self.use_relative = True
 
     @property
     def conf(self):
@@ -28,8 +26,13 @@ class EnvDirs:
     @conf.setter
     def conf(self, value):
         self._conf = value
-        self.rules_d = join(self.conf, 'rules.d')
-        self.mixin_d = join(self.conf, 'mixin.d')
+
+    @property
+    def rules_d(self):
+        return join(self.conf, 'rules.d')
+
+    def mixin_d(self):
+        return join(self.conf, 'mixin.d')
 
     def init_dir(self):
         for name in self.init_required_dirs:
