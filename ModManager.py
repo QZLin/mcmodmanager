@@ -6,7 +6,9 @@ import re
 import shutil
 import zipfile
 from enum import Enum
-from os.path import join, exists, islink, relpath, abspath
+from os import PathLike
+from os.path import join, exists, islink, relpath, abspath, normpath
+from pathlib import PurePath
 from typing import Dict, List, Any, Tuple
 
 import yaml
@@ -14,8 +16,9 @@ from click import echo
 
 import DataUtil
 import StrVersion
+from DataUtil import ModFileInfo
 from MixConfig import Config
-from RuntimeConfig import EnvDirs, EnvFiles, get_env
+from RuntimeConfig import get_env
 
 try:
     from yaml import CLoader as YamlLoader, CDumper as YamlDumper
@@ -25,13 +28,13 @@ except ImportError:
 j = join
 ENCODING = 'utf-8'
 
-root = os.getcwd()
-env = None
-env_conf = join(root, 'mcm.yaml')
-if exists(env_conf):
-    with open(env_conf) as file1:
-        env = yaml.load(file1, YamlLoader)
-env_dir, env_file = get_env(root, env)
+_root = os.getcwd()
+_env = None
+_env_path = PurePath(_root, 'mcm.yaml')
+if exists(_env_path):
+    with open(_env_path) as _env_file:
+        _env = yaml.load(_env_file, YamlLoader)
+env_dir, env_file = get_env(_root, _env)
 __dir_heap = []
 
 
@@ -74,20 +77,21 @@ def nerd_get(obj: dict, *pairs: Tuple[Any, Any]):
     return next_obj
 
 
-def _zip_has(zip_, path):
-    return len([x for x in zip_.filelist if x.filename == path]) == 1
+def __zip_has(zip_, path):
+    r = next((x for x in zip_.filelist if x.filename == path), None)
+    return r is not None
 
 
-def mod_metadata(file) -> Tuple[str, str] | Tuple[None, None]:
+def mod_metadata(file) -> Tuple[str | None, str | None]:
     try:
         archive_file = zipfile.ZipFile(file)
     except zipfile.BadZipFile:
         logging.warning(f'not a zip {file}')
         return None, None
-    if _zip_has(archive_file, 'fabric.mod.json'):
+    if __zip_has(archive_file, 'fabric.mod.json'):
         mod_type = 'fabric'
         content = archive_file.read('fabric.mod.json').decode()
-    elif _zip_has(archive_file, 'quilt.mod.json'):
+    elif __zip_has(archive_file, 'quilt.mod.json'):
         mod_type = 'quilt'
         file_orig = json.loads(archive_file.read('quilt.mod.json'))
         file_orig.update(file_orig['quilt_loader'])
@@ -109,7 +113,11 @@ def mixin(filename, mixin_data=None):
     return
 
 
-def extract_metadata(library_dir=None, output_dir=None) -> List[str]:
+# def get_files(path):
+#     pass
+
+
+def extract_metadata(library_dir=None, output_dir=None) -> List[PathLike]:
     """
     extract all metadata that already at library folder
     :param library_dir:
@@ -128,16 +136,17 @@ def extract_metadata(library_dir=None, output_dir=None) -> List[str]:
     # mixin_data = {x.pop('file'): x for x in mixin_data}
 
     jars = []
-    for file in next(os.walk(library_dir))[2]:
-        out_path = j(output_dir, f'{file}.json')
-        if file in mixin_data_files:
-            metadata_ = mixin(file, mixin_data)
+    for filename in next(os.walk(library_dir))[2]:
+        file = PurePath(library_dir, filename)
+        file_cache = PurePath(output_dir, f'{filename}.json', )
+        if file.name in mixin_data_files:
+            data = mixin(filename, mixin_data)
         else:
-            metadata_, mod_type = mod_metadata(j(library_dir, file))
-        if metadata_ is None:
+            data, type_ = mod_metadata(file)
+        if data is None:
             continue
-        with open(out_path, 'w', encoding=ENCODING) as f:
-            f.write(metadata_)
+        with open(file_cache, 'w', encoding=ENCODING) as f:
+            f.write(data)
         jars.append(file)
     return jars
 
@@ -150,47 +159,57 @@ def meta_cache(cache_file=None) -> dict:
     try:
         with open(cache_file, 'r') as f:
             result = json.load(f)
+        return {PurePath(env_dir.metadata, k): v for k, v in result.items()}
     except json.JSONDecodeError:
-        result = {}
-    return result
+        return {}
 
 
-def parse_metadata(dir_=None, cache_file=None, rebuild=False) -> Dict[str, Any]:
+def parse_metadata(dir_=None, file_all_cache=None, rebuild_=False) -> Dict[PurePath, Any]:
     if dir_ is None:
         dir_ = env_dir.metadata
-    if cache_file is None:
-        cache_file = env_file.metadata_cache
+    if file_all_cache is None:
+        file_all_cache = env_file.metadata_cache
 
-    if not rebuild:
-        return meta_cache(cache_file)
+    if not rebuild_:
+        return meta_cache(file_all_cache)
 
     metadata = {}
-    files = (x for x in next(os.walk(dir_))[2] if x.endswith('.json'))
-    for filename in files:
-        with open(j(dir_, filename), encoding='utf-8') as f:
+    all_cache = (x for x in next(os.walk(dir_))[2] if x.endswith('.json'))
+    for name in all_cache:
+        cache_file = PurePath(dir_, name)
+        with open(cache_file, encoding=ENCODING) as f:
             content = json.load(f)
-            metadata[filename] = content
-    with open(cache_file, 'w') as f:
+            metadata[cache_file.name] = content
+    with open(file_all_cache, 'w') as f:
         json.dump(metadata, f, indent=2)
 
-    return metadata
+    return {PurePath(env_dir.metadata, k): v for k, v in metadata.items()}
 
 
-def get_library(metadata: dict) -> Dict[str, List[str]]:
+def rebuild():
+    extract_metadata()
+    parse_metadata(rebuild_=True)
+
+
+def get_all(all_metadata: dict[PurePath, dict]) -> Dict[str, List[DataUtil.ModFileInfo]]:
     versions_data = {}
-    for filename, data in metadata.items():
-        name = filename.removesuffix('.json')
-        if 'id' not in data.keys():
-            logging.warning(f'key#id not found at #{filename}')
+    for file, metadata in all_metadata.items():
+        if 'id' not in metadata.keys():
+            logging.error(f'key#id not found at #{file.stem}')
             continue
-        mod_id = data['id']
+        mod_id = metadata['id']
+        info = DataUtil.ModFileInfo(mod_id, PurePath(env_dir.mods_available, file.stem))
         if mod_id not in versions_data.keys():
             versions_data[mod_id] = []
-        versions_data[mod_id].append(name)
+        versions_data[mod_id].append(info)
+
+        if 'name' in metadata.keys():
+            info.name = metadata['name']
+
     return versions_data
 
 
-def get_version(mod_id, index=None, auto=False, versions_data=None) -> Tuple[str] | List[str]:
+def get_version(mod_id, index=None, auto=False, versions_data=None) -> tuple[ModFileInfo] | list[ModFileInfo]:
     if versions_data is None:
         versions_data = list_library()
     if mod_id not in versions_data.keys():
@@ -204,28 +223,26 @@ def get_version(mod_id, index=None, auto=False, versions_data=None) -> Tuple[str
     return versions
 
 
-def enable(filename, id_, mapping: DataUtil.Data = None):
+def enable(file: PurePath, id_, mapping: DataUtil.Data = None):
     mapping = DataUtil.Data(env_file.mapping) if mapping is None else mapping
 
-    # target = join(env_dir.mods_available, filename)
     target = None
     if env_dir.use_relative:
         try:
             rel = relpath(start=env_dir.mods_enabled, path=env_dir.mods_available)
-            target = join(rel, filename)
+            target = PurePath(rel, file.name)
         except ValueError:
-            pass
-    if target is None:
-        target = abspath(join(env_dir.mods_available, filename))
+            target = None
+    if target is None and not file.is_absolute():
+        target = abspath(file)
 
-    link_name = f'{id_}.jar'
-    link = join(env_dir.mods_enabled, link_name)
+    link = PurePath(env_dir.mods_enabled, f'{id_}.jar')
     if exists(link) or islink(link):
         os.remove(link)
-        logging.info(f'Existed {link_name} Removed')
-    os.symlink(target, link)
-    mapping[link_name] = target
-    logging.info(f'{link_name}#{link} -> {target}')
+        logging.info(f'Existed {link.name} Removed')
+    os.symlink(normpath(target), link)
+    mapping[link.name] = str(target)
+    logging.info(f'{link.name}#{link} -> {target}')
     return link, target
 
 
@@ -244,20 +261,23 @@ def enable_auto(mod_id, versions_data=None, mapping: DataUtil.Data = None):
         logging.error(f'No available mod of {mod_id} except block list {blocked}')
         return
 
-    return enable(versions[0], mod_id, mapping)
+    return enable(versions[0].file, mod_id, mapping)
 
 
-def disable(file):
+def disable(file, mapping=None):
+    mapping = DataUtil.Data(env_file.mapping) if mapping is None else mapping
+
     if exists(file) or islink(file):
         os.remove(file)
         echo(f'[Unlink]: {file}')
+        mapping.pop(file)
     else:
         logging.warning(f'NotFound {file}')
 
 
 def list_library():
     meta = parse_metadata(env_dir.metadata)
-    all_jar_mod = get_library(meta)
+    all_jar_mod = get_all(meta)
     return all_jar_mod
 
 
@@ -355,7 +375,7 @@ def archive(path: str) -> Tuple[List[str], List[str]]:
     mapping.write()
 
     extract_metadata()
-    parse_metadata(env_dir.metadata, rebuild=True)
+    parse_metadata(env_dir.metadata, rebuild_=True)
     pop_d()
     return unlinked, archived
 

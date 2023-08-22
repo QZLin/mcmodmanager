@@ -1,7 +1,9 @@
 import json
 import os.path
 from dataclasses import dataclass
-from typing import Literal
+from os import PathLike
+from pathlib import PurePath
+from typing import Literal, List
 
 
 class Data(dict):
@@ -30,8 +32,12 @@ class Data(dict):
             self.write()
 
     def read(self):
-        with open(self.file, 'r') as f:
-            self.update(json.load(f))
+        with open(self.file, 'r',encoding='utf-8') as f:
+            try:
+                self.update(json.load(f))
+            except json.JSONDecodeError:
+                # raise RuntimeError(f'Parse {self.file} fail')
+                self.write()
 
     def write(self):
         with open(self.file, 'w') as f:
@@ -39,15 +45,39 @@ class Data(dict):
 
 
 @dataclass
-class ModFileInfo:
-    id: str
+class File:
     filename: str
     directory: str
-    name: str = ""
-    version: str = ""
-    mcver: str = ""
-    launcher: Literal['fabric', 'quilt', 'forge'] = 'fabric'
+    ext: str = ""
 
     @property
     def fullpath(self):
         return os.path.join(self.filename, self.directory)
+
+
+@dataclass
+class ModFileInfo:
+    id: str
+    file: PurePath
+    name: str = ""
+    version: str = ""
+    mcver: str = ""
+    launcher: Literal['fabric', 'quilt', 'forge', None] = 'fabric'
+
+    @staticmethod
+    def from_json(dir_, filename, data, launcher=None) -> 'ModFileInfo':
+        r = ModFileInfo(data['id'], filename, dir_, launcher)
+        if 'version' in data.keys():
+            r.version = data['version']
+        try:
+            r.mcver = data['depends']['minecraft']
+        except KeyError:
+            pass
+
+        return r
+
+
+@dataclass
+class ModVerInfo:
+    id: str
+    mods: List[ModFileInfo]

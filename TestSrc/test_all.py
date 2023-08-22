@@ -14,11 +14,11 @@ class MyTestCase(unittest.TestCase):
 
     def test_rule_exp(self):
         import rule_expression as exp
-        test = '((a+b-c)+a1)+b_1+$ltest'
+        test = '((a+b-c)+a1)+b_1+$TestSrc'
         ast = exp.to_ast(test)
         print(exp.debug_tokens(ast))
 
-        rules1 = {'a': [1, 2, 3], 'b': [4, 5, 6], 'c': [2, 4, 6], 'a1': [2], 'b_1': [4], '$ltest': [0]}
+        rules1 = {'a': [1, 2, 3], 'b': [4, 5, 6], 'c': [2, 4, 6], 'a1': [2], 'b_1': [4], '$TestSrc': [0]}
         r = exp.execute(ast, rules1)
         print(r)
         r.sort()
@@ -31,7 +31,7 @@ class MyTestCase(unittest.TestCase):
 
     def test_mix_config(self):
         import MixConfig
-        print(MixConfig.Mixed.load('ltest/res/mix/mix.yaml'))
+        print(MixConfig.Mixed.load('TestSrc/res/mix/mix.yaml'))
         return self.assertTrue(True)
 
 

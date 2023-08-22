@@ -1,6 +1,7 @@
 import logging
 import os
 from os.path import exists, join
+from pathlib import PurePath
 from typing import Tuple
 
 
@@ -10,13 +11,13 @@ class EnvDirs:
                           'metadata', 'runvar')
 
     def __init__(self, root):
-        self.mods_available = join(root, 'mods-available')
-        self.mods_enabled = join(root, 'mods-enabled')
-        self.metadata = join(root, 'metadata')
+        self.mods_available = PurePath(root, 'mods-available')
+        self.mods_enabled = PurePath(root, 'mods-enabled')
+        self.metadata = PurePath(root, 'metadata')
 
-        self.conf = join(root, 'conf')
+        self.conf = PurePath(root, 'conf')
 
-        self.runvar = join(root, 'var')
+        self.runvar = PurePath(root, 'var')
         self.use_relative = True
 
     @property
@@ -29,10 +30,10 @@ class EnvDirs:
 
     @property
     def rules_d(self):
-        return join(self.conf, 'rules.d')
+        return PurePath(self.conf, 'rules.d')
 
     def mixin_d(self):
-        return join(self.conf, 'mixin.d')
+        return PurePath(self.conf, 'mixin.d')
 
     def init_dir(self):
         for name in self.init_required_dirs:
@@ -49,9 +50,9 @@ class EnvDirs:
 
 class EnvFiles:
     def __init__(self, dirs: EnvDirs):
-        self.metadata_cache = join(dirs.metadata, 'metadata.json')
-        self.mapping = join(dirs.runvar, 'maps.json')
-        self.rule = join(dirs.conf, 'rules.json')
+        self.metadata_cache = PurePath(dirs.metadata, 'metadata.json')
+        self.mapping = PurePath(dirs.runvar, 'maps.json')
+        self.rule = PurePath(dirs.conf, 'rules.json')
 
 
 def get_env(root: str, env=None) -> Tuple[EnvDirs, EnvFiles]:

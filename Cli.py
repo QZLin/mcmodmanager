@@ -5,7 +5,8 @@ import logging
 import os
 import shutil
 import typing as ty
-from os.path import join, exists, basename
+from os.path import join, exists, basename, samefile
+from pathlib import PurePath
 
 import click
 from click import echo
@@ -62,37 +63,43 @@ def env():
 
 @cli.command()
 def rebuild():
-    Mn.extract_metadata()
-    Mn.parse_metadata(rebuild=True)
+    Mn.rebuild()
 
 
 @cli.command()
 @click.argument('file')
 def add(file):
-    file_lib = join(Mn.env_dir.mods_available, basename(file))
-    in_lib = None
-    if exists(file_lib):
-        in_lib = True
-    if exists(file):
-        in_lib = False
-    if in_lib is None:
-        logging.error(f'file not exist: {file}')
+    file_ = PurePath(file)
+    lib_file = PurePath(Mn.env_dir.mods_available, file_.name)
+    file_exist, lib_file_exist = False, False
+    move = False
+    if exists(lib_file):
+        lib_file_exist = True
+    if exists(file_):
+        file_exist = True
+
+    if not file_exist and not lib_file_exist:
+        logging.error(f'file not exist: {file_}')
         return
-    target = file_lib if in_lib else file
-    echo(file)
-    if not in_lib:
-        shutil.move(target, Mn.env_dir.mods_available)
-    metadata, type_ = Mn.mod_metadata(target)
+    if not file_exist and lib_file_exist:
+        file_ = lib_file
+    elif file_exist and lib_file_exist:
+        if not samefile(file_, lib_file):
+            move = True
+    echo(file_.name)
+    if move:
+        shutil.move(file_, Mn.env_dir.mods_available)
+    metadata, type_ = Mn.mod_metadata(file)
     if metadata is not None:
-        r = Mn.mixin(target)
+        r = Mn.mixin(file_)
         if r is None:
             r = metadata
         # print(r)
-        out_path = join(Mn.env_dir.metadata, f'{file}.json')
+        out_path = PurePath(Mn.env_dir.metadata, f'{file_.name}.json')
         with open(out_path, 'w') as f:
             f.write(r)
         cache = Mn.meta_cache()
-        cache.update({f'{file}.json': json.loads(r)})
+        cache.update({f'{file_}.json': json.loads(r)})
         with open(Mn.env_file.metadata_cache, 'w') as f:
             json.dump(cache, f, indent=2)
 
@@ -108,14 +115,12 @@ def fix(path):
 @click.option('--auto', '-a', is_flag=True)
 def enable(mod_id, index, auto):
     versions = Mn.get_version(mod_id, index, auto)
-
     if len(versions) != 1:
         echo('Select a version')
         format_print('versions', versions)
-        # echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(versions)]))
         return
     else:
-        r = Mn.enable(versions[0], mod_id)
+        r = Mn.enable(versions[0].file, mod_id)
         if r is not None:
             echo(r)
 
@@ -179,7 +184,7 @@ def mark(id_, pattern, server, client, flag):
 
 
 def format_print(data_type: ty.Literal['mod_list', 'mod_lib', 'versions', 'map'],
-                 data, format_: ty.Literal[None, 'strip', 'freeze', 'id'] = None):
+                 data: ty.Any, format_: ty.Literal[None, 'strip', 'freeze', 'id'] = None):
     logging.debug(data)
     if data_type == 'mod_lib':
         data: ty.Dict[str, ty.List[str]]
@@ -205,10 +210,12 @@ def format_print(data_type: ty.Literal['mod_list', 'mod_lib', 'versions', 'map']
         else:
             echo('\n'.join(data))
     elif data_type == 'versions':
-        data: ty.List[str]
-        echo('\n'.join([f'{i} -- {x}' for i, x in enumerate(data)]))
+        data: ty.List[DataUtil.ModFileInfo]
+        echo('\n'.join([f'{i} -- {x.file.name}' for i, x in enumerate(data)]))
     elif data_type == 'map':
-        pass
+        data: dict
+        for k, v in data.items():
+            echo(f'{k}=={v}')
 
 
 @cli.command(name='list', aliases=['ls'])
@@ -224,37 +231,8 @@ def list_mods_(format_, all_mods):
         mods = Mn.ls_mods()
         format_print('mod_list', mods, format_)
 
-    # if format_ == 'tree':
-    #     for k in mods.keys():
-    #         str_version.sort_versions(mods[k])
-    #     for k, v in mods.items():
-    #         if min_info and len(v) <= 1:
-    #             continue
-    #         print(k)
-    #         for x in v:
-    #             print(f'\t{x}')
-    # elif format_ == 'freeze':
-    #     mapping = DataUtil.Data(Mn.env_file.mapping)
-    #     print('\n'.join(f'{x}=={mapping[x]}' for x in mods))
-    # else:
-    #     echo('\n'.join(mods.keys()))
-    #     return mods
 
-
-# @cli.command()
-# @click.option('format_', '-f', metavar='format', type=click.Choice(('tree', 'freeze', 'id')))
-# def ls(format_):
-#     mods = Mn.ls_mods()
-#     if format_ == 'freeze':
-#         mapping = DataUtil.Data(Mn.env_file.mapping)
-#         print('\n'.join(f'{x}=={mapping[x]}' for x in mods))
-#     elif format_ == 'id':
-#         print('\n'.join((x.removesuffix('.jar') for x in mods)))
-#     else:
-#         print('\n'.join(mods))
-
-
-@cli.command('versions')
+@cli.command(name='versions')
 @click.argument('name')
 def versions_(name):
     format_print('versions', Mn.get_version(name))
