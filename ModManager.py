@@ -270,7 +270,7 @@ def disable(file, mapping=None):
     if exists(file) or islink(file):
         os.remove(file)
         echo(f'[Unlink]: {file}')
-        mapping.pop(file)
+        mapping.pop(file.name, None)
     else:
         logging.warning(f'NotFound {file}')
 

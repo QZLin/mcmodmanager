@@ -129,6 +129,7 @@ def enable(mod_id, index, auto):
 @click.argument('mod_id')
 def disable(mod_id):
     file = join(Mn.env_dir.mods_enabled, f'{mod_id}.jar' if not mod_id.endswith('.jar') else mod_id)
+    file = PurePath(file)
     echo(f'[disable] {file}')
     Mn.disable(file)
 
