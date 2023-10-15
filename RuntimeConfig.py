@@ -50,7 +50,7 @@ class EnvDirs:
 
 class EnvFiles:
     def __init__(self, dirs: EnvDirs):
-        self.metadata_cache = PurePath(dirs.metadata, 'metadata.json')
+        self.metadata_cache = PurePath(dirs.conf, 'metadata.json')
         self.mapping = PurePath(dirs.runvar, 'maps.json')
         self.rule = PurePath(dirs.conf, 'rules.json')
 

@@ -32,7 +32,7 @@ class Data(dict):
             self.write()
 
     def read(self):
-        with open(self.file, 'r',encoding='utf-8') as f:
+        with open(self.file, 'r', encoding='utf-8') as f:
             try:
                 self.update(json.load(f))
             except json.JSONDecodeError:
@@ -62,7 +62,7 @@ class ModFileInfo:
     name: str = ""
     version: str = ""
     mcver: str = ""
-    launcher: Literal['fabric', 'quilt', 'forge', None] = 'fabric'
+    loader: Literal['fabric', 'quilt', 'forge', None] = 'fabric'
 
     @staticmethod
     def from_json(dir_, filename, data, launcher=None) -> 'ModFileInfo':
@@ -75,6 +75,9 @@ class ModFileInfo:
             pass
 
         return r
+
+    def __str__(self):
+        return f'Mod({self.name}@{self.id}:{self.version}:{self.mcver}[{self.loader}]->{self.file.name})'
 
 
 @dataclass

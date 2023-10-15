@@ -63,7 +63,16 @@ def env():
 
 @cli.command()
 def rebuild():
-    Mn.rebuild()
+    Mn.update(rebuild_=True)
+
+
+@cli.command()
+def update():
+    """
+    only try to analyse new file, will not rebuild
+    :return:
+    """
+    Mn.update()
 
 
 @cli.command()
@@ -91,7 +100,7 @@ def add(file):
         shutil.move(file_, Mn.env_dir.mods_available)
     metadata, type_ = Mn.mod_metadata(file)
     if metadata is not None:
-        r = Mn.mixin(file_)
+        r = Mn.do_mixin(file_)
         if r is None:
             r = metadata
         # print(r)
