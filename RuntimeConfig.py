@@ -40,6 +40,8 @@ class EnvDirs:
             if not hasattr(self, name):
                 continue
             dir_ = self.__getattribute__(name)
+            if callable(dir_):
+                dir_ = dir_()
             if not exists(dir_):
                 os.makedirs(dir_)
             elif os.path.isdir(dir_):
