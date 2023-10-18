@@ -137,10 +137,13 @@ def do_mixin(filename, orig_data, mixin_data):
         raise RuntimeError('Multiple mixin set for single file')
 
 
-def get_files(path, contain_subdir=False):
+def get_files(path, contain_subdir=False, file_type=None):
     if contain_subdir:
         raise NotImplementedError
-    return [PurePath(path, filename) for filename in next(os.walk(path))[2]]
+    result = [PurePath(path, filename) for filename in next(os.walk(path))[2]]
+    if file_type is not None:
+        return [x for x in result if x.suffix == file_type]
+    return result
 
 
 def extract_metadata(files, mixin_data):
@@ -452,47 +455,78 @@ PT_DISABLE = re.compile(r'(.*\.jar)(\.(?:old|disabled))$')
 PT_JAR = re.compile(r'(.*)\.jar$')
 
 
-def archive(path: str) -> Tuple[List[str], List[str]]:
-    files: List[str] = next(os.walk(path))[2]  # ls -File
+def archive(file: PurePath, archive_name=None, del_source=True, allow_override=False):
+    if archive_name is None:
+        archive_name = file.name
+    archived = PurePath(env_dir.mods_available, archive_name)
+    logging.debug(f'archive {file}->{archived}')
+    if allow_override:
+        if exists(archived):
+            os.remove(archived)
+    else:
+        if exists(archived):
+            logging.error(f'{archived} existed and override is not allowed')
 
-    push_d(path)
-    unlinked = []
-    archived = []
+    if del_source:
+        shutil.move(file, archived)
+    else:
+        shutil.copy(file, archived)
 
-    mapping = get_map()
-    for file_name in files:
-        # old link
-        if islink(file_name):
-            r = re.match(PT_DISABLE, file_name)
-            if r is not None:
-                origin_name = r.groups()[0]
-                unlinked.append(file_name)
-                os.unlink(file_name)
-                if origin_name in mapping:
-                    mapping.pop(origin_name)
-                logging.debug(f'unlink {file_name}')
-        # unknown file
-        elif r := re.match(PT_DISABLE, file_name):
-            restored_name = file_name.removesuffix(r.groups()[1])
-            if not os.path.exists(target := j(env_dir.mods_available, restored_name)):
-                archived.append(file_name)
-                shutil.move(file_name, target)
-                mapping.pop(file_name)
-            else:
-                logging.error(f'Conflict Name {file_name} -> {restored_name}')
-        # new file
-        elif re.match(PT_JAR, file_name):
-            archived.append(file_name)
-            shutil.move(file_name, join(env_dir.mods_available, file_name))
-            if file_name in mapping.keys():
-                mapping.pop(file_name)
-            logging.info(f'move {file_name} to [mods_available]')
-    mapping.write()
 
-    extract_metadata()
-    parse_metadata(env_dir.metadata, rebuild_=True)
-    pop_d()
-    return unlinked, archived
+def archive_dir(path: str):
+    # files: List[str] = next(os.walk(path))[2]  # ls -File
+    disabled = []
+    old_list = []
+    new_files = []
+
+    # push_d(path)
+    for file in get_files(path, file_type='.jar'):
+        if not islink(file):
+            logging.info(f'archive {file}')
+            archive(file, allow_override=True)
+            new_files.append(file)
+    for file in get_files(path, file_type='.old'):
+        old_list.append(file)
+        if islink(file):
+            logging.info(f'unlink {file}')
+            os.remove(file)
+        else:
+            logging.info(f'archive {file}')
+            archive(file, file.stem)
+    for file in get_files(path, file_type='.disabled'):
+        disabled.append(file)
+        if islink(file):
+            logging.info(f'unlink {file}')
+            os.remove(file)
+        else:
+            logging.info(f'archive {file}')
+            archive(file, file.stem)
+
+    # for file_name in files:
+    #     file = PurePath(path, file_name)
+    #     if islink(file):
+    #         if file.suffix == '.jar':
+    #             pass
+    #         elif file.suffix == '.old':
+    #             old_list.append(file)
+    #             os.remove(file)
+    #         elif file.suffix == '.disabled':
+    #             disabled.append(file)
+    #             os.remove(file)
+    #         else:
+    #             logging.info(f'skipped unknown {file}')
+    #     else:
+    #         if file.suffix == '.jar':
+    #             archive_(file, allow_override=True)
+    #         elif file.suffix == '.old':
+    #             archive_(file, file.stem)
+    #             old_list.append(file)
+    #         elif file.suffix == '.disabled':
+    #             archive_(file, file.stem, allow_override=False)
+    #             disabled.append(file)
+    #         else:
+    #             logging.info(f'skipped unknown {file}')
+    return old_list
 
 
 def get_map():

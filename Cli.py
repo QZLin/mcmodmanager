@@ -78,39 +78,40 @@ def update():
 @cli.command()
 @click.argument('file')
 def add(file):
-    file_ = PurePath(file)
-    lib_file = PurePath(Mn.env_dir.mods_available, file_.name)
-    file_exist, lib_file_exist = False, False
-    move = False
-    if exists(lib_file):
-        lib_file_exist = True
-    if exists(file_):
-        file_exist = True
-
-    if not file_exist and not lib_file_exist:
-        logging.error(f'file not exist: {file_}')
-        return
-    if not file_exist and lib_file_exist:
-        file_ = lib_file
-    elif file_exist and lib_file_exist:
-        if not samefile(file_, lib_file):
-            move = True
-    echo(file_.name)
-    if move:
-        shutil.move(file_, Mn.env_dir.mods_available)
-    metadata, type_ = Mn.mod_metadata(file)
-    if metadata is not None:
-        r = Mn.do_mixin(file_)
-        if r is None:
-            r = metadata
-        # print(r)
-        out_path = PurePath(Mn.env_dir.metadata, f'{file_.name}.json')
-        with open(out_path, 'w') as f:
-            f.write(r)
-        cache = Mn.meta_cache()
-        cache.update({f'{file_}.json': json.loads(r)})
-        with open(Mn.env_file.metadata_cache, 'w') as f:
-            json.dump(cache, f, indent=2)
+    pass
+    # file_ = PurePath(file)
+    # lib_file = PurePath(Mn.env_dir.mods_available, file_.name)
+    # file_exist, lib_file_exist = False, False
+    # move = False
+    # if exists(lib_file):
+    #     lib_file_exist = True
+    # if exists(file_):
+    #     file_exist = True
+    #
+    # if not file_exist and not lib_file_exist:
+    #     logging.error(f'file not exist: {file_}')
+    #     return
+    # if not file_exist and lib_file_exist:
+    #     file_ = lib_file
+    # elif file_exist and lib_file_exist:
+    #     if not samefile(file_, lib_file):
+    #         move = True
+    # echo(file_.name)
+    # if move:
+    #     shutil.move(file_, Mn.env_dir.mods_available)
+    # metadata, type_ = Mn.mod_metadata(file)
+    # if metadata is not None:
+    #     r = Mn.do_mixin(file_)
+    #     if r is None:
+    #         r = metadata
+    #     # print(r)
+    #     out_path = PurePath(Mn.env_dir.metadata, f'{file_.name}.json')
+    #     with open(out_path, 'w') as f:
+    #         f.write(r)
+    #     cache = Mn.meta_cache()
+    #     cache.update({f'{file_}.json': json.loads(r)})
+    #     with open(Mn.env_file.metadata_cache, 'w') as f:
+    #         json.dump(cache, f, indent=2)
 
 
 @cli.command()
@@ -327,7 +328,7 @@ def gen_rule(args):
 
 
 def save(rule_name, preview=False):
-    mods = [x.removesuffix('.jar') for x in next(os.walk('.'))[2] if x.endswith('.jar')]
+    mods = Mn.get_files(Mn.env_dir.mods_available)
     if preview:
         echo('\n'.join(mods))
         return mods
@@ -380,18 +381,9 @@ def import_(path, read_only):
 def archive(path, upgrade=True):
     if path is None:
         path = Mn.env_dir.mods_enabled
-    unlinked, archived = Mn.archive(path)
-    echo('[UNLINK]:')
-    format_print('mod_list', unlinked)
+    archived = Mn.archive_dir(path)
     echo('[ARCHIVE]:')
-    format_print('mod_list', unlinked)
-    if upgrade:
-        echo('[Upgrade]:')
-        mods = [x.removesuffix('.old').removesuffix('.jar') for x in archived if x.endswith('.old')]
-        mapping = DataUtil.Data(Mn.env_file.mapping, delay_write=True)
-        for x in mods:
-            Mn.enable_auto(x, mapping=mapping)
-        mapping.write()
+    format_print('mod_list', archived)
 
 
 @cli.command(name='select', aliases=['sl'])
