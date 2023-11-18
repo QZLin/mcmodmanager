@@ -39,6 +39,7 @@ class EnvDirs:
         for name in self.init_required_dirs:
             if not hasattr(self, name):
                 continue
+            logging.info(f'checking dir {name}')
             dir_ = self.__getattribute__(name)
             if callable(dir_):
                 dir_ = dir_()

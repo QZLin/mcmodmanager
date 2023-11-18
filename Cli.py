@@ -6,7 +6,7 @@ import os
 import shutil
 import typing as ty
 from os.path import join, exists, basename, samefile
-from pathlib import PurePath
+from pathlib import PurePath, Path
 
 import click
 from click import echo
@@ -44,10 +44,9 @@ class CustomCliGroup(click.Group):
 @click.option('--debug', '-d', is_flag=True, default=False)
 @click.pass_context
 def cli(ctx, debug):
-    if not debug:
-        return
-    logging.getLogger().setLevel(logging.DEBUG)
-    logging.debug(ctx)
+    if debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.debug(ctx)
 
 
 @cli.command()
@@ -57,13 +56,14 @@ def init():
 
 @cli.command()
 def env():
-    echo(Mn.env_dir.__dict__)
-    echo(Mn.env_file.__dict__)
+    kv_print(Mn.env_dir.__dict__)
+    print()
+    kv_print(Mn.env_file.__dict__)
 
 
 @cli.command()
 def rebuild():
-    Mn.update(rebuild_=True)
+    Mn.update_mode(rebuild_=True)
 
 
 @cli.command()
@@ -72,7 +72,7 @@ def update():
     only try to analyse new file, will not rebuild
     :return:
     """
-    Mn.update()
+    Mn.update_mode()
 
 
 @cli.command()
@@ -115,8 +115,27 @@ def add(file):
 
 
 @cli.command()
-def fix(path):
-    pass
+def fix():
+    """
+    try to fix broken symlink via link target
+    :return:
+    """
+
+    jar_list = [Path(Mn.env_dir.mods_enabled, x) for x in next(os.walk(Mn.env_dir.mods_enabled))[2] if
+                x.endswith('.jar')]
+    link_list = [x for x in jar_list if x.is_symlink()]
+    target_list = [x.readlink() for x in link_list]
+    library = Mn.list_library()
+    for link, mod in zip(link_list, target_list):
+        versions = library[link.stem]
+        version = [x for x in versions if x.file.name == mod.name]
+        if len(version) > 1:
+            logging.error(f'{link.name} not found in {versions}')
+            continue
+        fixed_target = version[0].file
+        # os.unlink(link)
+        # os.symlink(PurePath(Mn.env_dir.mods_available, mod.name), link)
+        Mn.enable(fixed_target, link.stem)
 
 
 @cli.command()
@@ -136,11 +155,11 @@ def enable(mod_id, index, auto):
 
 
 @cli.command()
-@click.argument('mod_id')
+@click.argument('mod_id', metavar='name')
 def disable(mod_id):
     file = join(Mn.env_dir.mods_enabled, f'{mod_id}.jar' if not mod_id.endswith('.jar') else mod_id)
     file = PurePath(file)
-    echo(f'[disable] {file}')
+    echo(f'[Disable] {mod_id}')
     Mn.disable(file)
 
 
@@ -229,6 +248,10 @@ def format_print(data_type: ty.Literal['mod_list', 'mod_lib', 'versions', 'map']
             echo(f'{k}=={v}')
 
 
+def kv_print(data: dict):
+    print('\n'.join(f'{k}: {v}' for k, v in data.items()))
+
+
 @cli.command(name='list', aliases=['ls'])
 @click.option('format_', '-f', metavar='format', type=click.Choice(('simple', 'strip', 'tree', 'freeze', 'id')))
 # @click.option('--tree', '-t', is_flag=True)
@@ -243,7 +266,7 @@ def list_mods_(format_, all_mods):
         format_print('mod_list', mods, format_)
 
 
-@cli.command(name='versions')
+@cli.command(name='versions', aliases=['v'])
 @click.argument('name')
 def versions_(name):
     format_print('versions', Mn.get_version(name))
@@ -381,9 +404,8 @@ def import_(path, read_only):
 def archive(path, upgrade=True):
     if path is None:
         path = Mn.env_dir.mods_enabled
-    archived = Mn.archive_dir(path)
-    echo('[ARCHIVE]:')
-    format_print('mod_list', archived)
+    dis, old, new = Mn.archive_dir(path)
+    print(' '.join([x.stem for x in old]))
 
 
 @cli.command(name='select', aliases=['sl'])
@@ -410,6 +432,8 @@ if __name__ == '__main__':
     if pre_args[0].ide_debug:
         logging.getLogger().setLevel(logging.DEBUG)
         dbg_args = input("input args:").split(' ')
+        if 'mcm' in dbg_args:
+            dbg_args.remove('mcm')
     if pre_args[0].debug:
         logging.getLogger().setLevel(logging.DEBUG)
     logging.debug('Pre-Parsing finished')

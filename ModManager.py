@@ -35,6 +35,8 @@ _env_path = PurePath(_root, 'mcm.yaml')
 if exists(_env_path):
     with open(_env_path) as _env_file:
         _env = yaml.load(_env_file, YamlLoader)
+else:
+    raise RuntimeError('init first')
 env_dir, env_file = get_env(_root, _env)
 __dir_heap = []
 
@@ -292,13 +294,15 @@ class MetaCache:
         return f'{v.name}.json' in self._indexes
 
 
-def update(rebuild_=False):
+def update_mode(rebuild_=False):
     files = get_files(env_dir.mods_available)
     m_data, m_names = get_mixin()
 
     cache = MetaCache(late_init=True)
     if rebuild_:
         cache.clear()
+        for x in get_files(env_dir.metadata, file_type='.json'):
+            os.remove(x)
     else:
         cache.rebuild()
         for file in files.copy():
@@ -351,8 +355,10 @@ def enable(file: PurePath, id_, mapping: DataUtil.Data = None):
             target = PurePath(rel, file.name)
         except ValueError:
             target = None
-    if target is None and not file.is_absolute():
+    else:
         target = abspath(file)
+    # if target is None and not file.is_absolute():
+    #     target = abspath(file)
 
     link = PurePath(env_dir.mods_enabled, f'{id_}.jar')
     if exists(link) or islink(link):
@@ -473,18 +479,18 @@ def archive(file: PurePath, archive_name=None, del_source=True, allow_override=F
         shutil.copy(file, archived)
 
 
-def archive_dir(path: str):
+def archive_dir(path: str, ignore_disabled=True):
     # files: List[str] = next(os.walk(path))[2]  # ls -File
-    disabled = []
+    dis_list = []
     old_list = []
-    new_files = []
+    new_list = []
 
     # push_d(path)
     for file in get_files(path, file_type='.jar'):
         if not islink(file):
             logging.info(f'archive {file}')
             archive(file, allow_override=True)
-            new_files.append(file)
+            new_list.append(file)
     for file in get_files(path, file_type='.old'):
         old_list.append(file)
         if islink(file):
@@ -494,10 +500,12 @@ def archive_dir(path: str):
             logging.info(f'archive {file}')
             archive(file, file.stem)
     for file in get_files(path, file_type='.disabled'):
-        disabled.append(file)
+        dis_list.append(file)
         if islink(file):
             logging.info(f'unlink {file}')
             os.remove(file)
+        elif ignore_disabled:
+            logging.info(f'ignore disabled {file}')
         else:
             logging.info(f'archive {file}')
             archive(file, file.stem)
@@ -526,7 +534,7 @@ def archive_dir(path: str):
     #             disabled.append(file)
     #         else:
     #             logging.info(f'skipped unknown {file}')
-    return old_list
+    return dis_list, old_list, new_list
 
 
 def get_map():
@@ -534,6 +542,10 @@ def get_map():
 
 
 def prune():
+    pass
+
+
+def check_env():
     pass
 
 
