@@ -5,19 +5,17 @@ import os
 import re
 import shutil
 import zipfile
-from dataclasses import dataclass
 from enum import Enum
-from os import PathLike
 from os.path import join, exists, islink, relpath, abspath, normpath
 from pathlib import PurePath
 from typing import Dict, List, Any, Tuple
 
 import yaml
-from click import echo
 
 import DataUtil
 import StrVersion
 from DataUtil import ModFileInfo
+from DictUtil import nerd_get
 from MixConfig import Config
 from RuntimeConfig import get_env
 
@@ -40,6 +38,8 @@ else:
 env_dir, env_file = get_env(_root, _env)
 __dir_heap = []
 
+notice = print
+
 
 def push_d(path):
     global __dir_heap
@@ -50,34 +50,6 @@ def push_d(path):
 def pop_d():
     global __dir_heap
     os.chdir(__dir_heap.pop())
-
-
-def nerd_dict_get(dict_: dict, *keys, fallback=None):
-    if fallback is None:
-        fallback = []
-    next_obj = dict_
-    for i, key in enumerate(keys):
-        if key in next_obj.keys():
-            next_obj = next_obj[key]
-            continue
-        if i == len(keys) - 1:
-            next_obj[key] = fallback
-            next_obj = fallback
-        else:
-            next_obj[key] = {}
-            next_obj = next_obj[key]
-    return next_obj
-
-
-def nerd_get(obj: dict, *pairs: Tuple[Any, Any]):
-    next_obj = obj
-    for pair in pairs:
-        key, value = pair
-        if key in obj.keys():
-            next_obj = obj[key]
-        else:
-            next_obj[key] = value
-    return next_obj
 
 
 def __zip_has(zip_, path):
@@ -98,7 +70,7 @@ mods-lib
 '''
 
 
-def mod_metadata(file, dict_first=False) -> Tuple[str | None, str | None]:
+def mod_metadata(file, to_dict=False) -> Tuple[str | dict | None, str | None]:
     try:
         archive_file = zipfile.ZipFile(file)
     except zipfile.BadZipFile:
@@ -106,12 +78,16 @@ def mod_metadata(file, dict_first=False) -> Tuple[str | None, str | None]:
         return None, None
     if __zip_has(archive_file, 'fabric.mod.json'):
         mod_type = 'fabric'
-        content = archive_file.read('fabric.mod.json').decode()
+        binary_content = archive_file.read('fabric.mod.json')
+        if to_dict:
+            content = json.loads(binary_content)
+        else:
+            content = binary_content.decode()
     elif __zip_has(archive_file, 'quilt.mod.json'):
         mod_type = 'quilt'
         file_dict = json.loads(archive_file.read('quilt.mod.json'))
         file_dict.update(file_dict['quilt_loader'])
-        content = file_dict if dict_first else json.dumps(file_dict)
+        content = file_dict if to_dict else json.dumps(file_dict)
     else:
         logging.error(f'unknown zip mod {file}')
         return None, None
@@ -133,13 +109,13 @@ def do_mixin(filename, orig_data, mixin_data):
     r = [x for x in mixin_data if x['file'] == filename]
     if len(r) == 1:
         data = r[0]
-        logging.info(f'mixin {filename} {data}')
+        notice(f'mixin {filename} {data}')
         return json.dumps(data)
     else:
         raise RuntimeError('Multiple mixin set for single file')
 
 
-def get_files(path, contain_subdir=False, file_type=None):
+def get_files(path, file_type=None, contain_subdir=False):
     if contain_subdir:
         raise NotImplementedError
     result = [PurePath(path, filename) for filename in next(os.walk(path))[2]]
@@ -183,30 +159,6 @@ def extract_metadata(files, mixin_data):
             all_cache[file_meta_cache] = data
     return all_cache
 
-    # library_dir = env_dir.mods_available if library_dir is None else library_dir
-    # output_dir = env_dir.metadata if output_dir is None else output_dir
-    # clean cached metadata
-    # cached_files = (x for x in next(os.walk(env_dir.metadata))[2] if x.endswith('.json'))
-    # for x in cached_files:
-    #     os.remove(j(env_dir.metadata, x))
-
-    # mixin_data = {x.pop('file'): x for x in mixin_data}
-
-    # jars = []
-    # for filename in next(os.walk(library_dir))[2]:
-    # file = PurePath(library_dir, filename)
-    # file_cache = PurePath(output_dir, f'{file}.json', )
-    # if file.name in mixin_data_files:
-    #     data = do_mixin(filename, mixin_data)
-    # else:
-    #     data, type_ = mod_metadata(file)
-    # if data is None:
-    #     return
-    # with open(file_cache, 'w', encoding=ENCODING) as f:
-    #     f.write(data)
-    # jars.append(file)
-    # return jars
-
 
 def parse_metadata(dir_=None, file_all_cache=None, rebuild_=False) -> Dict[PurePath, Any]:
     if dir_ is None:
@@ -218,18 +170,6 @@ def parse_metadata(dir_=None, file_all_cache=None, rebuild_=False) -> Dict[PureP
     if rebuild_:
         cache.rebuild()
         cache.save()
-
-    # all_meta = {}
-    # all_mata_caches = (x for x in next(os.walk(dir_))[2] if x.endswith('.json'))
-    # for name in all_mata_caches:
-    #     cache_file = PurePath(dir_, name)
-    #     with open(cache_file, encoding=ENCODING) as f:
-    #         content = json.load(f)
-    #         all_meta[cache_file.name] = content
-    # with open(file_all_cache, 'w') as f:
-    #     json.dump(all_meta, f, indent=2)
-
-    # return {PurePath(env_dir.metadata, k): v for k, v in all_meta.items()}
 
     return cache.cache
 
@@ -308,6 +248,8 @@ def update_mode(rebuild_=False):
         for file in files.copy():
             if cache.hit(file):
                 files.remove(file)
+            else:
+                notice(f'{file.name} updated')
 
     extract_metadata(files, (m_data, m_names))
     cache.rebuild()
@@ -345,6 +287,22 @@ def get_version(mod_id, index=None, auto=False, versions_data=None) -> tuple[Mod
     return versions
 
 
+def get_spec_mod(filename, id_=None, data=None):
+    if data is None:
+        data = list_library()
+    if id_ is not None:
+        versions = data[id_]
+        r = [x for x in versions if x.file.name == filename]
+        assert len(r) == 1
+        return r[0]
+    else:
+        for id_, versions in data.items():
+            r = [x for x in versions if x.file.name == filename]
+            assert len(r) <= 1
+            if len(r) == 1:
+                return r[0]
+
+
 def enable(file: PurePath, id_, mapping: DataUtil.Data = None):
     mapping = DataUtil.Data(env_file.mapping) if mapping is None else mapping
 
@@ -363,10 +321,10 @@ def enable(file: PurePath, id_, mapping: DataUtil.Data = None):
     link = PurePath(env_dir.mods_enabled, f'{id_}.jar')
     if exists(link) or islink(link):
         os.remove(link)
-        logging.info(f'Existed {link.name} Removed')
+        notice(f'Existed {link.name} Removed')
     os.symlink(normpath(target), link)
     mapping[link.name] = str(target)
-    logging.info(f'{link.name}#{link} -> {target}')
+    notice(f'{link.name}#{link} -> {target}')
     return link, target
 
 
@@ -379,7 +337,7 @@ def enable_auto(mod_id, versions_data=None, mapping: DataUtil.Data = None):
         if x not in versions:
             continue
         versions.remove(x)
-        logging.info(f'[Skip blocked]: {x}')
+        notice(f'[Skip blocked]: {x}')
     StrVersion.sort_versions(versions)
     if len(versions) < 1:
         logging.error(f'No available mod of {mod_id} except block list {blocked}')
@@ -393,7 +351,7 @@ def disable(file, mapping=None):
 
     if exists(file) or islink(file):
         os.remove(file)
-        echo(f'[Unlink]: {file}')
+        notice(f'[Unlink]: {file}')
         mapping.pop(file.name, None)
     else:
         logging.warning(f'NotFound {file}')
@@ -438,18 +396,17 @@ def apply(ruleset, pre_add_all=True):
 
 
 def clean(path):
-    push_d(path)
-    files = next(os.walk(path))[2]
+    files = [PurePath(path, x) for x in next(os.walk(path))[2]]
     mapping = get_map()
     for x in files:
+        logging.debug(f'{x}')
         if islink(x):
             os.unlink(x)
-            mapping.pop(x)
-            logging.info(f'[Unlink]: {x}')
+            mapping.pop(x.name)
+            notice(f'[Unlink]: {x.name}')
         else:
-            logging.warning(f'file {x} not symbolic link')
+            logging.warning(f'file {x.name} not symbolic link')
     mapping.write()
-    pop_d()
 
 
 def select(pattern):
@@ -461,7 +418,7 @@ PT_DISABLE = re.compile(r'(.*\.jar)(\.(?:old|disabled))$')
 PT_JAR = re.compile(r'(.*)\.jar$')
 
 
-def archive(file: PurePath, archive_name=None, del_source=True, allow_override=False):
+def archive(file: PurePath, archive_name=None, del_source=True, allow_override=False) -> PurePath | None:
     if archive_name is None:
         archive_name = file.name
     archived = PurePath(env_dir.mods_available, archive_name)
@@ -472,11 +429,13 @@ def archive(file: PurePath, archive_name=None, del_source=True, allow_override=F
     else:
         if exists(archived):
             logging.error(f'{archived} existed and override is not allowed')
+            return
 
     if del_source:
         shutil.move(file, archived)
     else:
         shutil.copy(file, archived)
+    return archived
 
 
 def archive_dir(path: str, ignore_disabled=True):
@@ -488,52 +447,30 @@ def archive_dir(path: str, ignore_disabled=True):
     # push_d(path)
     for file in get_files(path, file_type='.jar'):
         if not islink(file):
-            logging.info(f'archive {file}')
-            archive(file, allow_override=True)
+            notice(f'archive {file}')
+            archived = archive(file, allow_override=True)
+            metadata, type_ = mod_metadata(archived, to_dict=True)
+            enable(archived, metadata['id'])
             new_list.append(file)
     for file in get_files(path, file_type='.old'):
         old_list.append(file)
         if islink(file):
-            logging.info(f'unlink {file}')
+            notice(f'unlink {file}')
             os.remove(file)
         else:
-            logging.info(f'archive {file}')
+            notice(f'archive {file}')
             archive(file, file.stem)
     for file in get_files(path, file_type='.disabled'):
         dis_list.append(file)
         if islink(file):
-            logging.info(f'unlink {file}')
+            notice(f'unlink {file}')
             os.remove(file)
         elif ignore_disabled:
-            logging.info(f'ignore disabled {file}')
+            notice(f'ignore disabled {file}')
         else:
-            logging.info(f'archive {file}')
+            notice(f'archive {file}')
             archive(file, file.stem)
 
-    # for file_name in files:
-    #     file = PurePath(path, file_name)
-    #     if islink(file):
-    #         if file.suffix == '.jar':
-    #             pass
-    #         elif file.suffix == '.old':
-    #             old_list.append(file)
-    #             os.remove(file)
-    #         elif file.suffix == '.disabled':
-    #             disabled.append(file)
-    #             os.remove(file)
-    #         else:
-    #             logging.info(f'skipped unknown {file}')
-    #     else:
-    #         if file.suffix == '.jar':
-    #             archive_(file, allow_override=True)
-    #         elif file.suffix == '.old':
-    #             archive_(file, file.stem)
-    #             old_list.append(file)
-    #         elif file.suffix == '.disabled':
-    #             archive_(file, file.stem, allow_override=False)
-    #             disabled.append(file)
-    #         else:
-    #             logging.info(f'skipped unknown {file}')
     return dis_list, old_list, new_list
 
 
@@ -565,6 +502,3 @@ def read_rules(rule_file=env_file.rule) -> dict:
         return {}
     with open(rule_file) as f:
         return json.load(f)
-
-# def init_dir():
-#     return None

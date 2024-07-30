@@ -1,10 +1,16 @@
 import unittest
 from os.path import join
+import os
 
 res_root = 'res'
 
 
 class MyTestCase(unittest.TestCase):
+    def setUp(self):
+        os.chdir(r'C:\vmo\minecraft\client')
+        import ModManager
+        self.mn = ModManager
+
     def test_mixconfig(self):
         import MixConfig
         res = join(res_root, 'mix')
@@ -32,6 +38,10 @@ class MyTestCase(unittest.TestCase):
     def test_mix_config(self):
         import MixConfig
         print(MixConfig.Mixed.load('TestSrc/res/mix/mix.yaml'))
+        return self.assertTrue(True)
+
+    def test_list(self):
+        r = self.mn.list_library()
         return self.assertTrue(True)
 
 

@@ -1,12 +1,10 @@
 import argparse
 import json
 import logging
-# import logging as log
 import os
-import shutil
-import typing as ty
-from os.path import join, exists, basename, samefile
-from pathlib import PurePath, Path
+from os.path import join
+from pathlib import PurePath
+from typing import Dict, Literal, List, Any
 
 import click
 from click import echo
@@ -14,16 +12,17 @@ from click import echo
 import DataUtil
 import ModManager as Mn
 import StrVersion
+from DictUtil import nerd_get, nerd_dict_get, kv_print
 
 
 class CustomCliGroup(click.Group):
     def command(self, *args, **kwargs):
         def decorator(f):
-            aliases = kwargs.pop("aliases", None)
+            aliases = kwargs.pop('aliases', None)
             if aliases and isinstance(aliases, list):
-                name = kwargs.pop("name", None)
+                name = kwargs.pop('name', None)
                 if not name:
-                    raise click.UsageError("name command argument is required when using aliases.")
+                    raise click.UsageError('name command argument is required when using aliases.')
 
                 base_command = super(CustomCliGroup, self).command(name, *args, **kwargs)(f)
 
@@ -63,6 +62,10 @@ def env():
 
 @cli.command()
 def rebuild():
+    """
+    completely rebuild mod library
+    :return:
+    """
     Mn.update_mode(rebuild_=True)
 
 
@@ -79,66 +82,41 @@ def update():
 @click.argument('file')
 def add(file):
     pass
-    # file_ = PurePath(file)
-    # lib_file = PurePath(Mn.env_dir.mods_available, file_.name)
-    # file_exist, lib_file_exist = False, False
-    # move = False
-    # if exists(lib_file):
-    #     lib_file_exist = True
-    # if exists(file_):
-    #     file_exist = True
-    #
-    # if not file_exist and not lib_file_exist:
-    #     logging.error(f'file not exist: {file_}')
-    #     return
-    # if not file_exist and lib_file_exist:
-    #     file_ = lib_file
-    # elif file_exist and lib_file_exist:
-    #     if not samefile(file_, lib_file):
-    #         move = True
-    # echo(file_.name)
-    # if move:
-    #     shutil.move(file_, Mn.env_dir.mods_available)
-    # metadata, type_ = Mn.mod_metadata(file)
-    # if metadata is not None:
-    #     r = Mn.do_mixin(file_)
-    #     if r is None:
-    #         r = metadata
-    #     # print(r)
-    #     out_path = PurePath(Mn.env_dir.metadata, f'{file_.name}.json')
-    #     with open(out_path, 'w') as f:
-    #         f.write(r)
-    #     cache = Mn.meta_cache()
-    #     cache.update({f'{file_}.json': json.loads(r)})
-    #     with open(Mn.env_file.metadata_cache, 'w') as f:
-    #         json.dump(cache, f, indent=2)
+
+
+@cli.command(name='delete', aliases=['del', 'rm'])
+@click.argument('name')
+def delete(name):
+    echo(name)
+    mod = Mn.get_spec_mod(name)
+    print(f'delete {mod.file.name} {mod.file}')
+    os.remove(mod.file)
 
 
 @cli.command()
-def fix():
+@click.argument('path', required=False)
+def fix(path=None):
     """
     try to fix broken symlink via link target
     :return:
     """
-
-    jar_list = [Path(Mn.env_dir.mods_enabled, x) for x in next(os.walk(Mn.env_dir.mods_enabled))[2] if
-                x.endswith('.jar')]
+    if path is None:
+        path = Mn.env_dir.mods_enabled
+    jar_list = Mn.get_files(path, '.jar')
     link_list = [x for x in jar_list if x.is_symlink()]
     target_list = [x.readlink() for x in link_list]
     library = Mn.list_library()
     for link, mod in zip(link_list, target_list):
         versions = library[link.stem]
         version = [x for x in versions if x.file.name == mod.name]
-        if len(version) > 1:
-            logging.error(f'{link.name} not found in {versions}')
+        if len(version) != 1:
+            logging.error(f'{link.name} not matched in {versions}')
             continue
         fixed_target = version[0].file
-        # os.unlink(link)
-        # os.symlink(PurePath(Mn.env_dir.mods_available, mod.name), link)
         Mn.enable(fixed_target, link.stem)
 
 
-@cli.command()
+@cli.command(name='enable', aliases=['e'])
 @click.argument('mod_id', metavar='name')
 @click.argument('index', required=False, type=int, default=None)
 @click.option('--auto', '-a', is_flag=True)
@@ -159,7 +137,6 @@ def enable(mod_id, index, auto):
 def disable(mod_id):
     file = join(Mn.env_dir.mods_enabled, f'{mod_id}.jar' if not mod_id.endswith('.jar') else mod_id)
     file = PurePath(file)
-    echo(f'[Disable] {mod_id}')
     Mn.disable(file)
 
 
@@ -178,7 +155,7 @@ def block(file):
     echo(f'[Block] {file} of "{name}"')
     data = Mn.read_rules()
 
-    obj = Mn.nerd_dict_get(data, name, 'block')
+    obj = nerd_dict_get(data, name, 'block')
     if file not in obj:
         obj.append(file)
     Mn.write_rules(data)
@@ -208,16 +185,20 @@ def mark(id_, pattern, server, client, flag):
     echo('\t' + '\n\t'.join(ids))
     all_rules = Mn.read_rules()
     for fl in flags:
-        obj = Mn.nerd_dict_get(all_rules, 'ruleset', fl, fallback=[])
+        obj = nerd_dict_get(all_rules, 'ruleset', fl, fallback=[])
         obj.extend([x for x in ids if x not in obj])
     Mn.write_rules(all_rules)
 
 
-def format_print(data_type: ty.Literal['mod_list', 'mod_lib', 'versions', 'map'],
-                 data: ty.Any, format_: ty.Literal[None, 'strip', 'freeze', 'id'] = None):
+def info_complete():
+    pass
+
+
+def format_print(data_type: Literal['mod_list', 'mod_lib', 'versions', 'map'],
+                 data: Any, format_: Literal[None, 'strip', 'freeze', 'id'] = None):
     logging.debug(data)
     if data_type == 'mod_lib':
-        data: ty.Dict[str, ty.List[str]]
+        data: Dict[str, List[str]]
         if format_ == 'id':
             format_print('mod_list', data.keys())
         else:
@@ -228,7 +209,7 @@ def format_print(data_type: ty.Literal['mod_list', 'mod_lib', 'versions', 'map']
                 for x in v:
                     echo(f'\t{x}')
     elif data_type == 'mod_list':
-        data: ty.List[str]
+        data: List[str]
         if format_ == 'freeze':
             mapping = DataUtil.Data(Mn.env_file.mapping)
             echo('\n'.join(f'{x}=={mapping[x]}' for x in data))
@@ -240,16 +221,12 @@ def format_print(data_type: ty.Literal['mod_list', 'mod_lib', 'versions', 'map']
         else:
             echo('\n'.join(data))
     elif data_type == 'versions':
-        data: ty.List[DataUtil.ModFileInfo]
+        data: List[DataUtil.ModFileInfo]
         echo('\n'.join([f'{i} -- {x.file.name}' for i, x in enumerate(data)]))
     elif data_type == 'map':
         data: dict
         for k, v in data.items():
             echo(f'{k}=={v}')
-
-
-def kv_print(data: dict):
-    print('\n'.join(f'{k}: {v}' for k, v in data.items()))
 
 
 @cli.command(name='list', aliases=['ls'])
@@ -343,7 +320,7 @@ def gen_rule(args):
                 mods = (x for x in next(os.walk('.'))[2] if x.endswith('.jar'))
                 result.extend(y for y in mods if y not in result)
     if args1.name:
-        obj = Mn.nerd_dict_get(rule_data, 'ruleset', args1.name)
+        obj = nerd_dict_get(rule_data, 'ruleset', args1.name)
         obj.extend(result)
         Mn.write_rules(rule_data)
 
@@ -356,7 +333,7 @@ def save(rule_name, preview=False):
         echo('\n'.join(mods))
         return mods
     rules = Mn.read_rules()
-    mod_rule = Mn.nerd_get(rules, ('ruleset', {}), (rule_name, []))
+    mod_rule = nerd_get(rules, ('ruleset', {}), (rule_name, []))
     mod_rule.clear()
     mod_rule.extend(mods)
     Mn.write_rules(rules)
@@ -399,9 +376,10 @@ def import_(path, read_only):
 
 
 @cli.command()
+@click.option('-i', '--interactive', default=False)
 @click.option('-p', '--path', default=None)
 @click.option('-u', '--upgrade', is_flag=True)
-def archive(path, upgrade=True):
+def archive(path, upgrade=True, interactive=False):
     if path is None:
         path = Mn.env_dir.mods_enabled
     dis, old, new = Mn.archive_dir(path)
