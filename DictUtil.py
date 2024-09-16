@@ -29,5 +29,5 @@ def nerd_get(obj: dict, *pairs: Tuple[Any, Any]):
     return next_obj
 
 
-def kv_print(data: dict):
-    print('\n'.join(f'{k}: {v}' for k, v in data.items()))
+def kv_print(data: dict, end='\n'):
+    print('\n'.join(f'{k}: {v}' for k, v in data.items()), end=end)

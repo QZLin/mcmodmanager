@@ -115,12 +115,14 @@ def do_mixin(filename, orig_data, mixin_data):
         raise RuntimeError('Multiple mixin set for single file')
 
 
-def get_files(path, file_type=None, contain_subdir=False):
+def get_files(path, ext=None, contain_subdir=False, symlink: bool | None = None):
     if contain_subdir:
         raise NotImplementedError
     result = [PurePath(path, filename) for filename in next(os.walk(path))[2]]
-    if file_type is not None:
-        return [x for x in result if x.suffix == file_type]
+    if symlink is not None:
+        raise NotImplementedError
+    if ext is not None:
+        return [x for x in result if x.suffix == ext]
     return result
 
 
@@ -241,7 +243,7 @@ def update_mode(rebuild_=False):
     cache = MetaCache(late_init=True)
     if rebuild_:
         cache.clear()
-        for x in get_files(env_dir.metadata, file_type='.json'):
+        for x in get_files(env_dir.metadata, ext='.json'):
             os.remove(x)
     else:
         cache.rebuild()
@@ -445,14 +447,14 @@ def archive_dir(path: str, ignore_disabled=True):
     new_list = []
 
     # push_d(path)
-    for file in get_files(path, file_type='.jar'):
+    for file in get_files(path, ext='.jar'):
         if not islink(file):
             notice(f'archive {file}')
             archived = archive(file, allow_override=True)
             metadata, type_ = mod_metadata(archived, to_dict=True)
             enable(archived, metadata['id'])
             new_list.append(file)
-    for file in get_files(path, file_type='.old'):
+    for file in get_files(path, ext='.old'):
         old_list.append(file)
         if islink(file):
             notice(f'unlink {file}')
@@ -460,7 +462,7 @@ def archive_dir(path: str, ignore_disabled=True):
         else:
             notice(f'archive {file}')
             archive(file, file.stem)
-    for file in get_files(path, file_type='.disabled'):
+    for file in get_files(path, ext='.disabled'):
         dis_list.append(file)
         if islink(file):
             notice(f'unlink {file}')

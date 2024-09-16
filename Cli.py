@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import shutil
 from os.path import join
 from pathlib import PurePath
 from typing import Dict, Literal, List, Any
@@ -13,6 +14,7 @@ import DataUtil
 import ModManager as Mn
 import StrVersion
 from DictUtil import nerd_get, nerd_dict_get, kv_print
+from SureLib import sure_jar
 
 
 class CustomCliGroup(click.Group):
@@ -50,14 +52,17 @@ def cli(ctx, debug):
 
 @cli.command()
 def init():
+    """
+    create necessary files, dirs
+    :return:
+    """
     Mn.env_dir.init_dir()
 
 
 @cli.command()
 def env():
-    kv_print(Mn.env_dir.__dict__)
-    print()
-    kv_print(Mn.env_file.__dict__)
+    kv_print(Mn.env_dir.__dict__, end='\n\n')
+    kv_print(Mn.env_file.__dict__, end='\n\n')
 
 
 @cli.command()
@@ -80,8 +85,19 @@ def update():
 
 @cli.command()
 @click.argument('file')
-def add(file):
-    pass
+@click.option('--yes', '-y', is_flag=True)
+def add(file, yes):
+    file = PurePath(file)
+    if not os.path.exists(file):
+        echo('file not exist')
+        return
+    target = PurePath(Mn.env_dir.mods_available, file.name)
+    if os.path.exists(target) and not yes:
+        if input("file existed, override? [y/n]: ").lower() != 'y':
+            echo('canceled')
+            return
+        os.remove(target)
+    shutil.move(file, target)
 
 
 @cli.command(name='delete', aliases=['del', 'rm'])
@@ -135,8 +151,7 @@ def enable(mod_id, index, auto):
 @cli.command()
 @click.argument('mod_id', metavar='name')
 def disable(mod_id):
-    file = join(Mn.env_dir.mods_enabled, f'{mod_id}.jar' if not mod_id.endswith('.jar') else mod_id)
-    file = PurePath(file)
+    file = PurePath(Mn.env_dir.mods_enabled, sure_jar(mod_id))
     Mn.disable(file)
 
 
@@ -190,8 +205,23 @@ def mark(id_, pattern, server, client, flag):
     Mn.write_rules(all_rules)
 
 
-def info_complete():
-    pass
+@cli.command(name='info', aliases=['i'])
+@click.argument('id_', metavar='id')
+def info(id_):
+    """
+    display info of specify enabled mod
+    :param id_:
+    :return:
+    """
+    echo(f'Detail of mod `{id_}`:')
+    target = PurePath(Mn.env_dir.mods_enabled, f'{id_}.jar')
+    is_link = os.path.islink(target)
+    if is_link:
+        echo(os.readlink(target))
+    elif os.path.exists(target):
+        echo('unmanaged')
+    else:
+        echo('not existed')
 
 
 def format_print(data_type: Literal['mod_list', 'mod_lib', 'versions', 'map'],
