@@ -10,8 +10,6 @@ from os.path import join, exists, islink, relpath, abspath, normpath
 from pathlib import PurePath
 from typing import Dict, List, Any, Tuple
 
-import yaml
-
 import DataUtil
 import StrVersion
 from DataUtil import ModFileInfo
@@ -20,8 +18,10 @@ from MixConfig import Config
 from RuntimeConfig import get_env
 
 try:
+    import yaml
     from yaml import CLoader as YamlLoader, CDumper as YamlDumper
 except ImportError:
+    import yaml
     from yaml import Loader as YamlLoader, Dumper as YamlDumper
 
 j = join
@@ -115,7 +115,7 @@ def do_mixin(filename, orig_data, mixin_data):
         raise RuntimeError('Multiple mixin set for single file')
 
 
-def get_files(path, ext=None, contain_subdir=False, symlink: bool | None = None):
+def get_files(path, ext=None, contain_subdir=False, symlink: bool | None = None) -> List[PurePath]:
     if contain_subdir:
         raise NotImplementedError
     result = [PurePath(path, filename) for filename in next(os.walk(path))[2]]
@@ -236,25 +236,30 @@ class MetaCache:
         return f'{v.name}.json' in self._indexes
 
 
-def update_mode(rebuild_=False):
-    files = get_files(env_dir.mods_available)
+def update_mod(rebuild_=False):
+    files = get_files(env_dir.mods_available, ext='.jar')
+    file_names = [x.name for x in files]
     m_data, m_names = get_mixin()
 
-    cache = MetaCache(late_init=True)
+    global_cache = MetaCache(late_init=True)
     if rebuild_:
-        cache.clear()
-        for x in get_files(env_dir.metadata, ext='.json'):
-            os.remove(x)
+        global_cache.clear()
+        for meta_file in get_files(env_dir.metadata, ext='.json'):
+            os.remove(meta_file)
     else:
-        cache.rebuild()
+        global_cache.rebuild()
+        for meta_file in get_files(env_dir.metadata, ext='.json'):
+            if meta_file.stem not in file_names:
+                os.remove(meta_file)
+                notice(f'outdated {meta_file} removed')
         for file in files.copy():
-            if cache.hit(file):
+            if global_cache.hit(file):
                 files.remove(file)
             else:
                 notice(f'{file.name} updated')
 
     extract_metadata(files, (m_data, m_names))
-    cache.rebuild()
+    global_cache.rebuild()
 
 
 def get_all(all_metadata: dict[PurePath, dict]) -> Dict[str, List[DataUtil.ModFileInfo]]:

@@ -4,7 +4,7 @@ import logging
 import os
 import shutil
 from os.path import join
-from pathlib import PurePath
+from pathlib import PurePath, Path
 from typing import Dict, Literal, List, Any
 
 import click
@@ -71,7 +71,7 @@ def rebuild():
     completely rebuild mod library
     :return:
     """
-    Mn.update_mode(rebuild_=True)
+    Mn.update_mod(rebuild_=True)
 
 
 @cli.command()
@@ -80,7 +80,7 @@ def update():
     only try to analyse new file, will not rebuild
     :return:
     """
-    Mn.update_mode()
+    Mn.update_mod()
 
 
 @cli.command()
@@ -119,8 +119,8 @@ def fix(path=None):
     if path is None:
         path = Mn.env_dir.mods_enabled
     jar_list = Mn.get_files(path, '.jar')
-    link_list = [x for x in jar_list if x.is_symlink()]
-    target_list = [x.readlink() for x in link_list]
+    link_list = [x for x in jar_list if os.path.islink(x)]
+    target_list = [Path(x).readlink() for x in link_list]
     library = Mn.list_library()
     for link, mod in zip(link_list, target_list):
         versions = library[link.stem]
