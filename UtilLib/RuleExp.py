@@ -1,9 +1,9 @@
 import dataclasses
 import re
-from typing import *
+from typing import Dict, Literal, List, Any, Tuple
 
-token_word = re.compile(r'\$?[A-z|0-9_]+?(?=[()+\-\s])|\$?[A-z|0-9_]+?$')
-token_symbol = re.compile(r'[()+\-]')
+PT_WORD = re.compile(r'\$?[A-z|0-9_]+?(?=[()+\-\s])|\$?[A-z|0-9_]+?$')
+PT_SYMBOL = re.compile(r'[()+\-]')
 
 
 @dataclasses.dataclass
@@ -17,9 +17,9 @@ class Token:
 
 def to_ast(text: str) -> List[Token]:
     words = (Token(x.group(), x.span(), 'name')
-             for x in re.finditer(token_word, text))
+             for x in re.finditer(PT_WORD, text))
     symbols = (Token(x.group(), x.span(), 'operator')
-               for x in re.finditer(token_symbol, text))
+               for x in re.finditer(PT_SYMBOL, text))
     tokens = []
     tokens.extend(words)
     tokens.extend(symbols)

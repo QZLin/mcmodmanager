@@ -10,12 +10,10 @@ from os.path import join, exists, islink, relpath, abspath, normpath
 from pathlib import PurePath
 from typing import Dict, List, Any, Tuple
 
-import DataUtil
-import StrVersion
-from DataUtil import ModFileInfo
-from DictUtil import nerd_get
-from MixConfig import Config
-from RuntimeConfig import get_env
+from UtilLib import StrVersion, Data
+from UtilLib.Dict import nerd_get
+from UtilLib.MixConfig import Config
+from UtilLib.RuntimeConfig import get_env
 
 try:
     import yaml
@@ -262,14 +260,14 @@ def update_mod(rebuild_=False):
     global_cache.rebuild()
 
 
-def get_all(all_metadata: dict[PurePath, dict]) -> Dict[str, List[DataUtil.ModFileInfo]]:
+def get_all(all_metadata: dict[PurePath, dict]) -> Dict[str, List[Data.ModFileInfo]]:
     versions_data = {}
     for file, metadata in all_metadata.items():
         if 'id' not in metadata.keys():
             logging.error(f'key=id not found at #{file.name}')
             continue
         mod_id = metadata['id']
-        info = DataUtil.ModFileInfo(mod_id, PurePath(env_dir.mods_available, file.stem))
+        info = Data.ModFileInfo(mod_id, PurePath(env_dir.mods_available, file.stem))
         if mod_id not in versions_data.keys():
             versions_data[mod_id] = []
         versions_data[mod_id].append(info)
@@ -280,7 +278,8 @@ def get_all(all_metadata: dict[PurePath, dict]) -> Dict[str, List[DataUtil.ModFi
     return versions_data
 
 
-def get_version(mod_id, index=None, auto=False, versions_data=None) -> tuple[ModFileInfo] | list[ModFileInfo]:
+def get_version(mod_id, index=None, auto=False, versions_data=None) -> (
+        tuple[Data.ModFileInfo] | list[Data.ModFileInfo]):
     if versions_data is None:
         versions_data = list_library()
     if mod_id not in versions_data.keys():
@@ -310,8 +309,8 @@ def get_spec_mod(filename, id_=None, data=None):
                 return r[0]
 
 
-def enable(file: PurePath, id_, mapping: DataUtil.Data = None):
-    mapping = DataUtil.Data(env_file.mapping) if mapping is None else mapping
+def enable(file: PurePath, id_, mapping: Data.Data = None):
+    mapping = Data.Data(env_file.mapping) if mapping is None else mapping
 
     target = None
     if env_dir.use_relative:
@@ -335,7 +334,7 @@ def enable(file: PurePath, id_, mapping: DataUtil.Data = None):
     return link, target
 
 
-def enable_auto(mod_id, versions_data=None, mapping: DataUtil.Data = None):
+def enable_auto(mod_id, versions_data=None, mapping: Data.Data = None):
     versions = get_version(mod_id, versions_data)
     rules = read_rules()
     blocked = nerd_get(rules, ('mods', {}), (mod_id, {}), ('block', []))
@@ -354,7 +353,7 @@ def enable_auto(mod_id, versions_data=None, mapping: DataUtil.Data = None):
 
 
 def disable(file, mapping=None):
-    mapping = DataUtil.Data(env_file.mapping) if mapping is None else mapping
+    mapping = Data.Data(env_file.mapping) if mapping is None else mapping
 
     if exists(file) or islink(file):
         os.remove(file)
@@ -482,7 +481,7 @@ def archive_dir(path: str, ignore_disabled=True):
 
 
 def get_map():
-    return DataUtil.Data(env_file.mapping, delay_write=True)
+    return Data.Data(env_file.mapping, delay_write=True)
 
 
 def prune():

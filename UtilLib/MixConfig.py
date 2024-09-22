@@ -2,6 +2,7 @@ import enum
 import json
 import os
 from os.path import join
+from pathlib import PurePath
 
 import yaml
 
@@ -16,10 +17,10 @@ class CFGType:
     JSON = enum.auto()
 
 
-def test_type(name):
-    if name.endswith('.yaml') or name.endswith('.yml'):
+def get_cfg_type(file: PurePath):
+    if file.suffix in ('.yaml', '.yml'):
         return CFGType.YAML
-    elif name.endswith('.json'):
+    elif file.suffix in ('.json',):
         return CFGType.JSON
 
 
@@ -27,7 +28,7 @@ class Mixed:
     @staticmethod
     def load(path, type_=None):
         if type_ is None:
-            type_ = test_type(path)
+            type_ = get_cfg_type(path)
         if type_ == CFGType.YAML:
             with open(path, 'r') as f:
                 return yaml.load(f, YamlLoader)
@@ -40,7 +41,7 @@ class Mixed:
     @staticmethod
     def dump(path, content, type_=None):
         if type_ is None:
-            type_ = test_type(path)
+            type_ = get_cfg_type(path)
         if type_ == CFGType.YAML:
             with open(path, 'w') as f:
                 return yaml.dump(content, f, YamlDumper)
@@ -69,20 +70,21 @@ class Config:
 
     @staticmethod
     def config_files(root, subdir_name, name=None):
-        subdir = join(root, subdir_name)
+        subdir = PurePath(root, subdir_name)
         result = []
         # root/config.xxx
         if name is not None:
             for ext in Config.types.keys():
-                path_ = join(root, f'{name}.{ext}')
+                path_ = PurePath(root, f'{name}.{ext}')
                 if os.path.exists(path_):
-                    result.append((path_, test_type(ext)))
+                    result.append((path_, get_cfg_type(path_)))
         # config.d/xxxx.xxx
         if os.path.isdir(subdir):
-            for file in next(os.walk(subdir))[2]:
-                type_ = test_type(file)
+            for name in next(os.walk(subdir))[2]:
+                file = PurePath(subdir, name)
+                type_ = get_cfg_type(file)
                 if type_ is not None:
-                    result.append((join(subdir, file), type_))
+                    result.append((file, type_))
         return result
 
     @staticmethod

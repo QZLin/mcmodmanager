@@ -1,6 +1,6 @@
 import logging
 import os
-from os.path import exists, join
+from os.path import exists
 from pathlib import PurePath
 from typing import Tuple
 
@@ -46,7 +46,7 @@ class EnvDirs:
             if not exists(dir_):
                 os.makedirs(dir_)
             elif os.path.isdir(dir_):
-                logging.debug(f'skip existed dir {dir_}')
+                logging.debug(f'skipping existed dir {dir_}')
             else:
                 raise RuntimeError(f'can\'t create dir when file existed: {dir_}')
 

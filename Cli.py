@@ -10,11 +10,10 @@ from typing import Dict, Literal, List, Any
 import click
 from click import echo
 
-import DataUtil
 import ModManager as Mn
-import StrVersion
-from DictUtil import nerd_get, nerd_dict_get, kv_print
-from SureLib import sure_jar
+from UtilLib import StrVersion, Data
+from UtilLib.Dict import nerd_get, nerd_dict_get, kv_print
+from UtilLib.Sure import sure_jar
 
 
 class CustomCliGroup(click.Group):
@@ -23,6 +22,8 @@ class CustomCliGroup(click.Group):
             aliases = kwargs.pop('aliases', None)
             if aliases and isinstance(aliases, list):
                 name = kwargs.pop('name', None)
+                if not name:
+                    name = f.__name__
                 if not name:
                     raise click.UsageError('name command argument is required when using aliases.')
 
@@ -74,7 +75,7 @@ def rebuild():
     Mn.update_mod(rebuild_=True)
 
 
-@cli.command()
+@cli.command(aliases=['u'])
 def update():
     """
     only try to analyse new file, will not rebuild
@@ -241,7 +242,7 @@ def format_print(data_type: Literal['mod_list', 'mod_lib', 'versions', 'map'],
     elif data_type == 'mod_list':
         data: List[str]
         if format_ == 'freeze':
-            mapping = DataUtil.Data(Mn.env_file.mapping)
+            mapping = Data.Data(Mn.env_file.mapping)
             echo('\n'.join(f'{x}=={mapping[x]}' for x in data))
             pass
         elif format_ == 'strip':
@@ -251,7 +252,7 @@ def format_print(data_type: Literal['mod_list', 'mod_lib', 'versions', 'map'],
         else:
             echo('\n'.join(data))
     elif data_type == 'versions':
-        data: List[DataUtil.ModFileInfo]
+        data: List[Data.ModFileInfo]
         echo('\n'.join([f'{i} -- {x.file.name}' for i, x in enumerate(data)]))
     elif data_type == 'map':
         data: dict

@@ -12,14 +12,14 @@ class MyTestCase(unittest.TestCase):
         self.mn = ModManager
 
     def test_mixconfig(self):
-        import MixConfig
+        from UtilLib import MixConfig
         res = join(res_root, 'mix')
         r = MixConfig.Config.mixed_config(res, res + '/mix.d', 'mix')
         print(r)
         self.assertEqual(r, {'a': 1, 'b': 1, 'c': 1, 'd': 1, 'e': 1})
 
     def test_rule_exp(self):
-        import rule_expression as exp
+        from UtilLib import RuleExp as exp
         test = '((a+b-c)+a1)+b_1+$TestSrc'
         ast = exp.to_ast(test)
         print(exp.debug_tokens(ast))
@@ -36,7 +36,7 @@ class MyTestCase(unittest.TestCase):
         return self.assertTrue(True)
 
     def test_mix_config(self):
-        import MixConfig
+        from UtilLib import MixConfig
         print(MixConfig.Mixed.load('TestSrc/res/mix/mix.yaml'))
         return self.assertTrue(True)
 
